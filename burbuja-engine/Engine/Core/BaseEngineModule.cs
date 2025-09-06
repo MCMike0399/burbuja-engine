@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using BurbujaEngine.Logging;
 
 namespace BurbujaEngine.Engine.Core;
 
@@ -469,8 +470,7 @@ public abstract class BaseEngineModule : IEngineModule, IModulePriorityModule, I
     /// </summary>
     protected virtual void OnStateChanged(ModuleState previousState, ModuleState newState)
     {
-        // Default implementation does nothing
-        // Derived classes can override to react to state changes
+        Logger?.LogStateTransition(FriendlyId, previousState.ToString(), newState.ToString());
     }
     
     /// <summary>
@@ -478,7 +478,7 @@ public abstract class BaseEngineModule : IEngineModule, IModulePriorityModule, I
     /// </summary>
     protected void LogInfo(string message)
     {
-        Logger?.LogInformation("[{FriendlyId}] {Message}", FriendlyId, message);
+        Logger?.LogInformation("ℹ️  [{FriendlyId}] {Message}", FriendlyId, message);
         AddLogEntry("Information", message);
     }
     
@@ -487,7 +487,7 @@ public abstract class BaseEngineModule : IEngineModule, IModulePriorityModule, I
     /// </summary>
     protected void LogWarning(string message)
     {
-        Logger?.LogWarning("[{FriendlyId}] {Message}", FriendlyId, message);
+        Logger?.LogWarning("⚠️  [{FriendlyId}] {Message}", FriendlyId, message);
         AddLogEntry("Warning", message);
     }
     
@@ -496,7 +496,7 @@ public abstract class BaseEngineModule : IEngineModule, IModulePriorityModule, I
     /// </summary>
     protected void LogError(string message, Exception? exception = null)
     {
-        Logger?.LogError(exception, "[{FriendlyId}] {Message}", FriendlyId, message);
+        Logger?.LogError(exception, "❌ [{FriendlyId}] {Message}", FriendlyId, message);
         AddLogEntry("Error", message, exception);
     }
     
@@ -505,7 +505,7 @@ public abstract class BaseEngineModule : IEngineModule, IModulePriorityModule, I
     /// </summary>
     protected void LogDebug(string message)
     {
-        Logger?.LogDebug("[{FriendlyId}] {Message}", FriendlyId, message);
+        Logger?.LogDebug("🐛 [{FriendlyId}] {Message}", FriendlyId, message);
         AddLogEntry("Debug", message);
     }
     

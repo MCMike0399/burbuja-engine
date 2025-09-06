@@ -2,8 +2,12 @@ using BurbujaEngine.Configuration;
 using BurbujaEngine.Engine.Core;
 using BurbujaEngine.Engine.Extensions;
 using BurbujaEngine.Monitor.Extensions;
+using BurbujaEngine.Logging;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Configure enhanced logging for development
+builder.Logging.AddEnhancedDevelopmentLogging(builder.Environment);
 
 // Add services to the container
 builder.Services.AddControllers();

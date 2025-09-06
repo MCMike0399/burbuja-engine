@@ -4,6 +4,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using BurbujaEngine.Engine.Drivers;
 using BurbujaEngine.Engine.Microkernel;
+using BurbujaEngine.Logging;
 
 namespace BurbujaEngine.Engine.Core;
 
@@ -798,8 +799,7 @@ public class BurbujaEngine : IBurbujaEngine, IDisposable
     
     protected virtual void OnStateChanged(EngineState previousState, EngineState newState)
     {
-        _logger.LogInformation("[{EngineId}] Engine state changed: {PreviousState} -> {NewState}", 
-            EngineId, previousState, newState);
+        _logger.LogStateTransition("BurbujaEngine", previousState.ToString(), newState.ToString());
     }
     
     #region Microkernel Driver Management
