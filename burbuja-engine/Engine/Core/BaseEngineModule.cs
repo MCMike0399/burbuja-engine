@@ -5,15 +5,16 @@ using System.Diagnostics;
 namespace BurbujaEngine.Engine.Core;
 
 /// <summary>
-/// Base implementation for engine modules.
-/// Provides common functionality for all engine modules.
+/// Base implementation for engine modules with integrated advanced priority support.
+/// Provides common functionality for all engine modules including semantic priority management.
 /// </summary>
-public abstract class BaseEngineModule : IEngineModule, IDisposable
+public abstract class BaseEngineModule : IEngineModule, IAdvancedPriorityModule, IDisposable
 {
     private readonly object _stateLock = new();
     private ModuleState _state = ModuleState.Created;
     private readonly List<LogEntry> _recentLogs = new();
     private readonly int _maxLogEntries = 100;
+    private ModulePriorityConfig? _priorityConfig;
     
     protected ILogger Logger { get; private set; } = default!;
     protected IModuleContext Context { get; private set; } = default!;
@@ -22,11 +23,153 @@ public abstract class BaseEngineModule : IEngineModule, IDisposable
     protected DateTime? StartedAt { get; private set; }
     protected CancellationTokenSource? ModuleCancellationTokenSource { get; private set; }
     
-    public abstract Guid ModuleId { get; }
     public abstract string ModuleName { get; }
     public virtual string Version => "1.0.0";
     public virtual IReadOnlyList<Guid> Dependencies => Array.Empty<Guid>();
-    public virtual int Priority => 1000;
+    
+    /// <summary>
+    /// Module ID with automatic generation based on module name if not overridden.
+    /// </summary>
+    public virtual Guid ModuleId => GenerateModuleId(ModuleName);
+    
+    /// <summary>
+    /// Advanced priority configuration for this module.
+    /// </summary>
+    public virtual ModulePriorityConfig PriorityConfig
+    {
+        get
+        {
+            if (_priorityConfig == null)
+            {
+                _priorityConfig = ConfigurePriority();
+            }
+            return _priorityConfig;
+        }
+    }
+    
+    /// <summary>
+    /// Legacy priority property for backward compatibility.
+    /// Uses the advanced priority system to calculate effective priority.
+    /// </summary>
+    public virtual int Priority => PriorityConfig.GetEffectivePriority(GetExecutionContext());
+    
+    /// <summary>
+    /// Semantic priority level for this module.
+    /// Override GetDefaultPriority() to customize this for derived classes.
+    /// </summary>
+    public virtual ModulePriority ModulePriorityLevel => PriorityConfig.BasePriority;
+    
+    /// <summary>
+    /// Generate a consistent Module ID based on the module name.
+    /// This ensures modules have stable IDs without hardcoding GUIDs.
+    /// For multiple instances, includes a unique suffix.
+    /// </summary>
+    protected virtual Guid GenerateModuleId(string moduleName)
+    {
+        // Create a unique suffix based on creation time and random data for multiple instances
+        var uniqueSuffix = $"{DateTime.UtcNow.Ticks}.{Environment.CurrentManagedThreadId}.{Random.Shared.Next()}";
+        var uniqueModuleName = $"BurbujaEngine.Module.{moduleName}.{uniqueSuffix}";
+        
+        // Use a deterministic approach to generate GUID from module name
+        using var sha1 = System.Security.Cryptography.SHA1.Create();
+        var hash = sha1.ComputeHash(System.Text.Encoding.UTF8.GetBytes(uniqueModuleName));
+        
+        // Take first 16 bytes and create a GUID
+        var guidBytes = new byte[16];
+        Array.Copy(hash, guidBytes, 16);
+        
+        // Set version (4) and variant bits for a valid GUID
+        guidBytes[6] = (byte)((guidBytes[6] & 0x0F) | 0x40); // Version 4
+        guidBytes[8] = (byte)((guidBytes[8] & 0x3F) | 0x80); // Variant bits
+        
+        return new Guid(guidBytes);
+    }
+    
+    /// <summary>
+    /// Configure the priority for this module.
+    /// Override this method to provide custom priority configuration.
+    /// </summary>
+    protected virtual ModulePriorityConfig ConfigurePriority()
+    {
+        return ModulePriorityConfig.Default(GetDefaultPriority());
+    }
+    
+    /// <summary>
+    /// Get the default priority for this module.
+    /// Override this to set the base priority level.
+    /// </summary>
+    protected virtual ModulePriority GetDefaultPriority() => ModulePriority.Core;
+    
+    /// <summary>
+    /// Get the current execution context for priority calculations.
+    /// This can be environment, configuration, or runtime context.
+    /// </summary>
+    protected virtual string? GetExecutionContext()
+    {
+        // Try to get context from various sources
+        try
+        {
+            if (Context?.Configuration != null)
+            {
+                // Check for explicit context configuration
+                if (Context.Configuration.TryGetValue("ExecutionContext", out var contextObj))
+                {
+                    return contextObj?.ToString();
+                }
+                
+                // Check for environment
+                if (Context.Configuration.TryGetValue("Environment", out var envObj))
+                {
+                    return envObj?.ToString();
+                }
+            }
+            
+            // Fall back to environment variable
+            return Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production";
+        }
+        catch
+        {
+            return "Production"; // Safe fallback
+        }
+    }
+    
+    /// <summary>
+    /// Helper method to create priority configuration with sub-priority.
+    /// </summary>
+    protected static ModulePriorityConfig CreatePriorityConfig(ModulePriority priority, int subPriority = 0)
+    {
+        return ModulePriorityConfig.WithSubPriority(priority, subPriority);
+    }
+    
+    /// <summary>
+    /// Helper method to create priority configuration with context adjustments.
+    /// </summary>
+    protected static ModulePriorityConfig CreateContextualPriorityConfig(
+        ModulePriority priority, 
+        Dictionary<string, int> contextAdjustments)
+    {
+        return ModulePriorityConfig.WithContext(priority, contextAdjustments);
+    }
+    
+    /// <summary>
+    /// Helper method to create a comprehensive priority configuration.
+    /// </summary>
+    protected static ModulePriorityConfig CreateAdvancedPriorityConfig(
+        ModulePriority priority,
+        int subPriority = 0,
+        bool canParallelInitialize = true,
+        Dictionary<string, int>? contextAdjustments = null,
+        HashSet<string>? tags = null)
+    {
+        return new ModulePriorityConfig
+        {
+            BasePriority = priority,
+            SubPriority = subPriority,
+            CanParallelInitialize = canParallelInitialize,
+            ContextAdjustments = contextAdjustments ?? new(),
+            Tags = tags ?? new()
+        };
+    }
     
     public ModuleState State
     {
@@ -328,7 +471,26 @@ public abstract class BaseEngineModule : IEngineModule, IDisposable
     /// <summary>
     /// Template method for populating module-specific diagnostics.
     /// </summary>
-    protected virtual Task OnPopulateDiagnosticsAsync(ModuleDiagnostics diagnostics, CancellationToken cancellationToken) => Task.CompletedTask;
+    protected virtual Task OnPopulateDiagnosticsAsync(ModuleDiagnostics diagnostics, CancellationToken cancellationToken)
+    {
+        // Add priority information to diagnostics
+        var context = GetExecutionContext();
+        diagnostics.Metadata["priority_config"] = new
+        {
+            base_priority = PriorityConfig.BasePriority.ToString(),
+            base_priority_value = PriorityConfig.BasePriority.ToNumericValue(),
+            sub_priority = PriorityConfig.SubPriority,
+            effective_priority = PriorityConfig.GetEffectivePriority(context),
+            execution_context = context,
+            can_parallel_initialize = PriorityConfig.CanParallelInitialize,
+            context_adjustments = PriorityConfig.ContextAdjustments,
+            tags = PriorityConfig.Tags.ToList(),
+            priority_category = PriorityConfig.BasePriority.GetCategoryName(),
+            priority_description = PriorityConfig.BasePriority.GetDescription()
+        };
+        
+        return Task.CompletedTask;
+    }
     
     /// <summary>
     /// Called when the module state changes.

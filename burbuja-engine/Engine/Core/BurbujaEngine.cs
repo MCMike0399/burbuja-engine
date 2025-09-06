@@ -600,8 +600,16 @@ public class BurbujaEngine : IBurbujaEngine, IDisposable
         var visiting = new HashSet<Guid>();
         var moduleMap = _modules.ToDictionary(m => m.ModuleId, m => m);
         
-        // Sort by priority first, then resolve dependencies
-        var modulesByPriority = _modules.OrderBy(m => m.Priority).ThenBy(m => m.ModuleName);
+        // Get execution context for priority calculation
+        var context = GetExecutionContext();
+        
+        // Sort by priority first using the new priority comparer, then resolve dependencies
+        var comparer = new ModulePriorityComparer(context);
+        var modulesByPriority = _modules.OrderBy(m => m, comparer);
+        
+        _logger.LogDebug("[{EngineId}] Module priority order (context: {Context}): {ModuleOrder}", 
+            EngineId, context ?? "default", 
+            string.Join(" -> ", modulesByPriority.Select(m => $"{m.ModuleName}({GetModulePriorityInfo(m, context)})")));
         
         foreach (var module in modulesByPriority)
         {
@@ -612,6 +620,42 @@ public class BurbujaEngine : IBurbujaEngine, IDisposable
         }
         
         return result;
+    }
+    
+    private string GetExecutionContext()
+    {
+        try
+        {
+            // Check configuration for execution context
+            if (_configuration.Values.TryGetValue("ExecutionContext", out var contextObj))
+            {
+                return contextObj?.ToString() ?? "Production";
+            }
+            
+            if (_configuration.Values.TryGetValue("Environment", out var envObj))
+            {
+                return envObj?.ToString() ?? "Production";
+            }
+            
+            // Fall back to environment variable
+            return Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production";
+        }
+        catch
+        {
+            return "Production";
+        }
+    }
+    
+    private string GetModulePriorityInfo(IEngineModule module, string? context)
+    {
+        if (module is IAdvancedPriorityModule advancedModule)
+        {
+            var config = advancedModule.PriorityConfig;
+            var effectivePriority = config.GetEffectivePriority(context);
+            return $"{config.BasePriority}({effectivePriority})";
+        }
+        
+        return module.Priority.ToString();
     }
     
     private void ResolveDependenciesRecursive(

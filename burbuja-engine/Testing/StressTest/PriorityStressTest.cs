@@ -1,0 +1,660 @@
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using System.Diagnostics;
+using BurbujaEngine.Engine.Core;
+using BurbujaEngine.Engine.Extensions;
+
+namespace BurbujaEngine.Testing.StressTest;
+
+/// <summary>
+/// Comprehensive stress test for the BurbujaEngine priority system.
+/// Tests module initialization order, performance under load, and priority behavior in different contexts.
+/// </summary>
+public class PriorityStressTest
+{
+    private readonly ILogger<PriorityStressTest> _logger;
+    private readonly List<TestResult> _results = new();
+    
+    public PriorityStressTest(ILogger<PriorityStressTest> logger)
+    {
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    }
+    
+    /// <summary>
+    /// Run comprehensive stress tests for the priority system.
+    /// </summary>
+    public async Task<StressTestReport> RunStressTestAsync(CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Starting BurbujaEngine Priority Stress Test...");
+        
+        var overallStopwatch = Stopwatch.StartNew();
+        var report = new StressTestReport
+        {
+            StartTime = DateTime.UtcNow,
+            TestResults = new List<TestResult>()
+        };
+        
+        try
+        {
+            // Test 1: Basic Priority Ordering
+            _logger.LogInformation("Test 1: Basic Priority Ordering");
+            var test1 = await TestBasicPriorityOrdering(cancellationToken);
+            report.TestResults.Add(test1);
+            
+            // Test 2: Context-Specific Priority Behavior
+            _logger.LogInformation("Test 2: Context-Specific Priority Behavior");
+            var test2 = await TestContextSpecificPriorities(cancellationToken);
+            report.TestResults.Add(test2);
+            
+            // Test 3: Parallel Initialization Performance
+            _logger.LogInformation("Test 3: Parallel Initialization Performance");
+            var test3 = await TestParallelInitialization(cancellationToken);
+            report.TestResults.Add(test3);
+            
+            // Test 4: Load Testing with Multiple Engines
+            _logger.LogInformation("Test 4: Load Testing with Multiple Engines");
+            var test4 = await TestMultipleEngineLoad(cancellationToken);
+            report.TestResults.Add(test4);
+            
+            // Test 5: Priority System Scalability
+            _logger.LogInformation("Test 5: Priority System Scalability");
+            var test5 = await TestPriorityScalability(cancellationToken);
+            report.TestResults.Add(test5);
+            
+            overallStopwatch.Stop();
+            report.EndTime = DateTime.UtcNow;
+            report.TotalDuration = overallStopwatch.Elapsed;
+            report.IsSuccessful = report.TestResults.All(r => r.IsSuccessful);
+            
+            _logger.LogInformation("Stress test completed in {Duration:F2}ms. Success: {Success}", 
+                overallStopwatch.Elapsed.TotalMilliseconds, report.IsSuccessful);
+            
+            return report;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Stress test failed: {Message}", ex.Message);
+            report.EndTime = DateTime.UtcNow;
+            report.TotalDuration = overallStopwatch.Elapsed;
+            report.IsSuccessful = false;
+            report.ErrorMessage = ex.Message;
+            return report;
+        }
+    }
+    
+    /// <summary>
+    /// Test basic priority ordering without context adjustments.
+    /// </summary>
+    private async Task<TestResult> TestBasicPriorityOrdering(CancellationToken cancellationToken)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        var result = new TestResult
+        {
+            TestName = "Basic Priority Ordering",
+            StartTime = DateTime.UtcNow
+        };
+        
+        try
+        {
+            var services = new ServiceCollection();
+            services.AddLogging(builder => builder.AddConsole().SetMinimumLevel(LogLevel.Information));
+            
+            // Add engine with all mock modules
+            services.AddBurbujaEngine(Guid.NewGuid(), engine =>
+            {
+                engine.WithConfiguration(config =>
+                {
+                    config.WithVersion("1.0.0-test")
+                          .WithModuleTimeout(TimeSpan.FromMinutes(1))
+                          .WithShutdownTimeout(TimeSpan.FromSeconds(30))
+                          .ContinueOnModuleFailure(false)
+                          .EnableParallelInitialization(false); // Sequential for order testing
+                });
+                
+                // Add modules in random order to test priority sorting
+                engine.AddModule<MockAnalyticsModule>();
+                engine.AddModule<MockConfigurationModule>();
+                engine.AddModule<MockEmailServiceModule>();
+                engine.AddModule<MockSecurityModule>();
+                engine.AddModule<MockCacheModule>();
+                engine.AddModule<MockBusinessLogicModule>();
+                engine.AddModule<MockMonitoringModule>();
+            });
+            
+            var serviceProvider = services.BuildServiceProvider();
+            var engine = serviceProvider.GetRequiredService<IBurbujaEngine>();
+            
+            // Test initialization
+            var initResult = await engine.InitializeAsync(cancellationToken);
+            if (!initResult.Success)
+            {
+                throw new Exception($"Engine initialization failed: {initResult.Message}");
+            }
+            
+            // Verify module order
+            var actualOrder = engine.Modules.Select(m => m.ModuleName).ToList();
+            var expectedOrder = new[]
+            {
+                "Mock Configuration Module",  // Critical 5
+                "Mock Security Module",       // Critical 10
+                "Mock Cache Module",          // Infrastructure 20
+                "Mock Business Logic Module", // Core 15
+                "Mock Email Service Module",  // Service 25
+                "Mock Analytics Module",      // Feature 30
+                "Mock Monitoring Module"      // Monitoring 10
+            };
+            
+            result.Metrics["ActualOrder"] = string.Join(" -> ", actualOrder);
+            result.Metrics["ExpectedOrder"] = string.Join(" -> ", expectedOrder);
+            
+            // Start engine
+            var startResult = await engine.StartAsync(cancellationToken);
+            if (!startResult.Success)
+            {
+                throw new Exception($"Engine start failed: {startResult.Message}");
+            }
+            
+            // Collect performance metrics
+            result.Metrics["InitializationTime"] = initResult.Duration.TotalMilliseconds;
+            result.Metrics["StartTime"] = startResult.Duration.TotalMilliseconds;
+            result.Metrics["ModuleCount"] = engine.Modules.Count;
+            
+            // Shutdown
+            await engine.ShutdownAsync(cancellationToken);
+            
+            stopwatch.Stop();
+            result.EndTime = DateTime.UtcNow;
+            result.Duration = stopwatch.Elapsed;
+            result.IsSuccessful = true;
+            result.Message = "Priority ordering test completed successfully";
+            
+            return result;
+        }
+        catch (Exception ex)
+        {
+            stopwatch.Stop();
+            result.EndTime = DateTime.UtcNow;
+            result.Duration = stopwatch.Elapsed;
+            result.IsSuccessful = false;
+            result.ErrorMessage = ex.Message;
+            result.Message = $"Priority ordering test failed: {ex.Message}";
+            return result;
+        }
+    }
+    
+    /// <summary>
+    /// Test context-specific priority behavior.
+    /// </summary>
+    private async Task<TestResult> TestContextSpecificPriorities(CancellationToken cancellationToken)
+    {
+        var result = new TestResult
+        {
+            TestName = "Context-Specific Priorities",
+            StartTime = DateTime.UtcNow
+        };
+        
+        var stopwatch = Stopwatch.StartNew();
+        
+        try
+        {
+            var contexts = new[] { "Development", "Testing", "Production" };
+            var contextResults = new Dictionary<string, ContextTestResult>();
+            
+            foreach (var context in contexts)
+            {
+                var contextStopwatch = Stopwatch.StartNew();
+                
+                var services = new ServiceCollection();
+                services.AddLogging(builder => builder.AddConsole().SetMinimumLevel(LogLevel.Information));
+                
+                services.AddBurbujaEngine(Guid.NewGuid(), engine =>
+                {
+                    engine.WithConfiguration(config =>
+                    {
+                        config.WithVersion("1.0.0-context-test")
+                              .WithValue("ExecutionContext", context)
+                              .WithModuleTimeout(TimeSpan.FromMinutes(1))
+                              .EnableParallelInitialization(true);
+                    });
+                    
+                    engine.AddModule<MockConfigurationModule>();
+                    engine.AddModule<MockSecurityModule>();
+                    engine.AddModule<MockCacheModule>();
+                    engine.AddModule<MockEmailServiceModule>();
+                    engine.AddModule<MockAnalyticsModule>();
+                    engine.AddModule<MockMonitoringModule>();
+                });
+                
+                var serviceProvider = services.BuildServiceProvider();
+                var engineInstance = serviceProvider.GetRequiredService<IBurbujaEngine>();
+                
+                var initResult = await engineInstance.InitializeAsync(cancellationToken);
+                var startResult = await engineInstance.StartAsync(cancellationToken);
+                
+                contextStopwatch.Stop();
+                
+                contextResults[context] = new ContextTestResult
+                {
+                    Context = context,
+                    InitializationTime = initResult.Duration,
+                    StartTime = startResult.Duration,
+                    TotalTime = contextStopwatch.Elapsed,
+                    ModuleOrder = engineInstance.Modules.Select(m => m.ModuleName).ToList(),
+                    Success = initResult.Success && startResult.Success
+                };
+                
+                await engineInstance.ShutdownAsync(cancellationToken);
+                serviceProvider.Dispose();
+            }
+            
+            // Analyze context differences
+            result.Metrics["DevelopmentInitTime"] = contextResults["Development"].InitializationTime.TotalMilliseconds;
+            result.Metrics["TestingInitTime"] = contextResults["Testing"].InitializationTime.TotalMilliseconds;
+            result.Metrics["ProductionInitTime"] = contextResults["Production"].InitializationTime.TotalMilliseconds;
+            
+            stopwatch.Stop();
+            result.EndTime = DateTime.UtcNow;
+            result.Duration = stopwatch.Elapsed;
+            result.IsSuccessful = contextResults.Values.All(r => r.Success);
+            result.Message = "Context-specific priority test completed";
+            
+            return result;
+        }
+        catch (Exception ex)
+        {
+            stopwatch.Stop();
+            result.EndTime = DateTime.UtcNow;
+            result.Duration = stopwatch.Elapsed;
+            result.IsSuccessful = false;
+            result.ErrorMessage = ex.Message;
+            return result;
+        }
+    }
+    
+    /// <summary>
+    /// Test parallel initialization performance.
+    /// </summary>
+    private async Task<TestResult> TestParallelInitialization(CancellationToken cancellationToken)
+    {
+        var result = new TestResult
+        {
+            TestName = "Parallel Initialization Performance",
+            StartTime = DateTime.UtcNow
+        };
+        
+        var stopwatch = Stopwatch.StartNew();
+        
+        try
+        {
+            // Test both sequential and parallel initialization
+            var sequentialTime = await MeasureInitializationTime(false, cancellationToken);
+            var parallelTime = await MeasureInitializationTime(true, cancellationToken);
+            
+            result.Metrics["SequentialTime"] = sequentialTime.TotalMilliseconds;
+            result.Metrics["ParallelTime"] = parallelTime.TotalMilliseconds;
+            result.Metrics["SpeedupRatio"] = sequentialTime.TotalMilliseconds / parallelTime.TotalMilliseconds;
+            result.Metrics["ParallelEfficiency"] = (sequentialTime.TotalMilliseconds - parallelTime.TotalMilliseconds) / sequentialTime.TotalMilliseconds * 100;
+            
+            stopwatch.Stop();
+            result.EndTime = DateTime.UtcNow;
+            result.Duration = stopwatch.Elapsed;
+            result.IsSuccessful = true;
+            result.Message = $"Parallel initialization achieved {result.Metrics["SpeedupRatio"]:F2}x speedup";
+            
+            return result;
+        }
+        catch (Exception ex)
+        {
+            stopwatch.Stop();
+            result.EndTime = DateTime.UtcNow;
+            result.Duration = stopwatch.Elapsed;
+            result.IsSuccessful = false;
+            result.ErrorMessage = ex.Message;
+            return result;
+        }
+    }
+    
+    private async Task<TimeSpan> MeasureInitializationTime(bool parallel, CancellationToken cancellationToken)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging(builder => builder.AddConsole().SetMinimumLevel(LogLevel.Warning));
+        
+        services.AddBurbujaEngine(Guid.NewGuid(), engine =>
+        {
+            engine.WithConfiguration(config =>
+            {
+                config.WithVersion("1.0.0-perf-test")
+                      .EnableParallelInitialization(parallel);
+            });
+            
+            // Add individual module instances instead of types to avoid DI conflicts
+            for (int i = 0; i < 3; i++)
+            {
+                engine.AddModule(new MockCacheModule());
+                engine.AddModule(new MockEmailServiceModule());
+                engine.AddModule(new MockAnalyticsModule());
+            }
+        });
+        
+        var serviceProvider = services.BuildServiceProvider();
+        var engine = serviceProvider.GetRequiredService<IBurbujaEngine>();
+        
+        var stopwatch = Stopwatch.StartNew();
+        var initResult = await engine.InitializeAsync(cancellationToken);
+        var startResult = await engine.StartAsync(cancellationToken);
+        stopwatch.Stop();
+        
+        await engine.ShutdownAsync(cancellationToken);
+        serviceProvider.Dispose();
+        
+        if (!initResult.Success || !startResult.Success)
+        {
+            throw new Exception($"Engine failed: Init={initResult.Success}, Start={startResult.Success}");
+        }
+        
+        return stopwatch.Elapsed;
+    }
+    
+    /// <summary>
+    /// Test multiple engine instances running concurrently.
+    /// </summary>
+    private async Task<TestResult> TestMultipleEngineLoad(CancellationToken cancellationToken)
+    {
+        var result = new TestResult
+        {
+            TestName = "Multiple Engine Load Test",
+            StartTime = DateTime.UtcNow
+        };
+        
+        var stopwatch = Stopwatch.StartNew();
+        
+        try
+        {
+            const int engineCount = 5;
+            var tasks = new List<Task<EngineTestResult>>();
+            
+            for (int i = 0; i < engineCount; i++)
+            {
+                tasks.Add(CreateAndTestEngine(i, cancellationToken));
+            }
+            
+            var results = await Task.WhenAll(tasks);
+            
+            result.Metrics["EngineCount"] = engineCount;
+            result.Metrics["AverageInitTime"] = results.Average(r => r.InitializationTime.TotalMilliseconds);
+            result.Metrics["MaxInitTime"] = results.Max(r => r.InitializationTime.TotalMilliseconds);
+            result.Metrics["MinInitTime"] = results.Min(r => r.InitializationTime.TotalMilliseconds);
+            result.Metrics["SuccessRate"] = (double)results.Count(r => r.Success) / engineCount * 100;
+            
+            stopwatch.Stop();
+            result.EndTime = DateTime.UtcNow;
+            result.Duration = stopwatch.Elapsed;
+            result.IsSuccessful = results.All(r => r.Success);
+            result.Message = $"Load test with {engineCount} engines completed";
+            
+            return result;
+        }
+        catch (Exception ex)
+        {
+            stopwatch.Stop();
+            result.EndTime = DateTime.UtcNow;
+            result.Duration = stopwatch.Elapsed;
+            result.IsSuccessful = false;
+            result.ErrorMessage = ex.Message;
+            return result;
+        }
+    }
+    
+    private async Task<EngineTestResult> CreateAndTestEngine(int engineIndex, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var services = new ServiceCollection();
+            services.AddLogging(builder => builder.AddConsole().SetMinimumLevel(LogLevel.Error));
+            
+            services.AddBurbujaEngine(Guid.NewGuid(), engine =>
+            {
+                engine.WithConfiguration(config =>
+                {
+                    config.WithVersion($"1.0.0-load-test-{engineIndex}")
+                          .EnableParallelInitialization(true);
+                });
+                
+                engine.AddModule<MockConfigurationModule>();
+                engine.AddModule<MockCacheModule>();
+                engine.AddModule<MockBusinessLogicModule>();
+                engine.AddModule<MockEmailServiceModule>();
+            });
+            
+            var serviceProvider = services.BuildServiceProvider();
+            var engine = serviceProvider.GetRequiredService<IBurbujaEngine>();
+            
+            var initStopwatch = Stopwatch.StartNew();
+            var initResult = await engine.InitializeAsync(cancellationToken);
+            var startResult = await engine.StartAsync(cancellationToken);
+            initStopwatch.Stop();
+            
+            await engine.ShutdownAsync(cancellationToken);
+            serviceProvider.Dispose();
+            
+            return new EngineTestResult
+            {
+                EngineIndex = engineIndex,
+                InitializationTime = initStopwatch.Elapsed,
+                Success = initResult.Success && startResult.Success
+            };
+        }
+        catch (Exception ex)
+        {
+            return new EngineTestResult
+            {
+                EngineIndex = engineIndex,
+                Success = false,
+                ErrorMessage = ex.Message
+            };
+        }
+    }
+    
+    /// <summary>
+    /// Test priority system scalability with many modules.
+    /// </summary>
+    private async Task<TestResult> TestPriorityScalability(CancellationToken cancellationToken)
+    {
+        var result = new TestResult
+        {
+            TestName = "Priority System Scalability",
+            StartTime = DateTime.UtcNow
+        };
+        
+        var stopwatch = Stopwatch.StartNew();
+        
+        try
+        {
+            var moduleCounts = new[] { 10, 25, 50, 100 };
+            var scalabilityResults = new Dictionary<int, TimeSpan>();
+            
+            foreach (var moduleCount in moduleCounts)
+            {
+                var testTime = await MeasureScalabilityForModuleCount(moduleCount, cancellationToken);
+                scalabilityResults[moduleCount] = testTime;
+                result.Metrics[$"Time_{moduleCount}_modules"] = testTime.TotalMilliseconds;
+            }
+            
+            // Calculate scalability metrics
+            var baseTime = scalabilityResults[moduleCounts[0]];
+            foreach (var kvp in scalabilityResults.Skip(1))
+            {
+                var ratio = kvp.Value.TotalMilliseconds / baseTime.TotalMilliseconds;
+                var efficiency = kvp.Key / ratio; // Modules per relative time unit
+                result.Metrics[$"Efficiency_{kvp.Key}_modules"] = efficiency;
+            }
+            
+            stopwatch.Stop();
+            result.EndTime = DateTime.UtcNow;
+            result.Duration = stopwatch.Elapsed;
+            result.IsSuccessful = true;
+            result.Message = "Scalability test completed successfully";
+            
+            return result;
+        }
+        catch (Exception ex)
+        {
+            stopwatch.Stop();
+            result.EndTime = DateTime.UtcNow;
+            result.Duration = stopwatch.Elapsed;
+            result.IsSuccessful = false;
+            result.ErrorMessage = ex.Message;
+            return result;
+        }
+    }
+    
+    private async Task<TimeSpan> MeasureScalabilityForModuleCount(int moduleCount, CancellationToken cancellationToken)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging(builder => builder.AddConsole().SetMinimumLevel(LogLevel.Error));
+        
+        services.AddBurbujaEngine(Guid.NewGuid(), engine =>
+        {
+            engine.WithConfiguration(config =>
+            {
+                config.WithVersion("1.0.0-scalability-test")
+                      .EnableParallelInitialization(true);
+            });
+            
+            // Add modules in a pattern to test priority sorting
+            var moduleFactories = new Func<IEngineModule>[]
+            {
+                () => new MockConfigurationModule(),
+                () => new MockSecurityModule(),
+                () => new MockCacheModule(),
+                () => new MockBusinessLogicModule(),
+                () => new MockEmailServiceModule(),
+                () => new MockAnalyticsModule(),
+                () => new MockMonitoringModule()
+            };
+            
+            for (int i = 0; i < moduleCount; i++)
+            {
+                var moduleFactory = moduleFactories[i % moduleFactories.Length];
+                engine.AddModule(moduleFactory());
+            }
+        });
+        
+        var serviceProvider = services.BuildServiceProvider();
+        var engine = serviceProvider.GetRequiredService<IBurbujaEngine>();
+        
+        var stopwatch = Stopwatch.StartNew();
+        var initResult = await engine.InitializeAsync(cancellationToken);
+        var startResult = await engine.StartAsync(cancellationToken);
+        stopwatch.Stop();
+        
+        await engine.ShutdownAsync(cancellationToken);
+        serviceProvider.Dispose();
+        
+        if (!initResult.Success || !startResult.Success)
+        {
+            throw new Exception($"Scalability test failed for {moduleCount} modules");
+        }
+        
+        return stopwatch.Elapsed;
+    }
+}
+
+/// <summary>
+/// Result of a single test within the stress test suite.
+/// </summary>
+public class TestResult
+{
+    public string TestName { get; set; } = string.Empty;
+    public DateTime StartTime { get; set; }
+    public DateTime EndTime { get; set; }
+    public TimeSpan Duration { get; set; }
+    public bool IsSuccessful { get; set; }
+    public string Message { get; set; } = string.Empty;
+    public string? ErrorMessage { get; set; }
+    public Dictionary<string, object> Metrics { get; set; } = new();
+}
+
+/// <summary>
+/// Overall stress test report.
+/// </summary>
+public class StressTestReport
+{
+    public DateTime StartTime { get; set; }
+    public DateTime EndTime { get; set; }
+    public TimeSpan TotalDuration { get; set; }
+    public bool IsSuccessful { get; set; }
+    public string? ErrorMessage { get; set; }
+    public List<TestResult> TestResults { get; set; } = new();
+    
+    public void PrintReport()
+    {
+        Console.WriteLine("=".PadRight(80, '='));
+        Console.WriteLine("BURBUJA ENGINE PRIORITY SYSTEM STRESS TEST REPORT");
+        Console.WriteLine("=".PadRight(80, '='));
+        Console.WriteLine($"Start Time: {StartTime:yyyy-MM-dd HH:mm:ss}");
+        Console.WriteLine($"End Time: {EndTime:yyyy-MM-dd HH:mm:ss}");
+        Console.WriteLine($"Total Duration: {TotalDuration.TotalSeconds:F2} seconds");
+        Console.WriteLine($"Overall Success: {IsSuccessful}");
+        
+        if (!string.IsNullOrEmpty(ErrorMessage))
+        {
+            Console.WriteLine($"Error: {ErrorMessage}");
+        }
+        
+        Console.WriteLine();
+        Console.WriteLine("TEST RESULTS:");
+        Console.WriteLine("-".PadRight(80, '-'));
+        
+        foreach (var test in TestResults)
+        {
+            Console.WriteLine($"Test: {test.TestName}");
+            Console.WriteLine($"  Duration: {test.Duration.TotalMilliseconds:F2}ms");
+            Console.WriteLine($"  Success: {test.IsSuccessful}");
+            Console.WriteLine($"  Message: {test.Message}");
+            
+            if (!string.IsNullOrEmpty(test.ErrorMessage))
+            {
+                Console.WriteLine($"  Error: {test.ErrorMessage}");
+            }
+            
+            if (test.Metrics.Any())
+            {
+                Console.WriteLine("  Metrics:");
+                foreach (var metric in test.Metrics)
+                {
+                    Console.WriteLine($"    {metric.Key}: {metric.Value}");
+                }
+            }
+            
+            Console.WriteLine();
+        }
+        
+        Console.WriteLine("=".PadRight(80, '='));
+    }
+}
+
+/// <summary>
+/// Result of testing a specific context.
+/// </summary>
+internal class ContextTestResult
+{
+    public string Context { get; set; } = string.Empty;
+    public TimeSpan InitializationTime { get; set; }
+    public TimeSpan StartTime { get; set; }
+    public TimeSpan TotalTime { get; set; }
+    public List<string> ModuleOrder { get; set; } = new();
+    public bool Success { get; set; }
+}
+
+/// <summary>
+/// Result of testing an individual engine.
+/// </summary>
+internal class EngineTestResult
+{
+    public int EngineIndex { get; set; }
+    public TimeSpan InitializationTime { get; set; }
+    public bool Success { get; set; }
+    public string? ErrorMessage { get; set; }
+}

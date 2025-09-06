@@ -15,10 +15,27 @@ public class DatabaseModule : BaseEngineModule
     private IDatabaseConnection? _databaseConnection;
     private IHealthChecker? _healthChecker;
     
-    public override Guid ModuleId { get; } = new Guid("F47AC10B-58CC-4372-A567-0E02B2C3D479");
     public override string ModuleName => "Database Module";
     public override string Version => "1.0.0";
-    public override int Priority => 100; // High priority - other modules depend on database
+    
+    /// <summary>
+    /// Configure priority for the database module.
+    /// Database is critical infrastructure that other modules depend on.
+    /// </summary>
+    protected override ModulePriorityConfig ConfigurePriority()
+    {
+        return CreateAdvancedPriorityConfig(
+            priority: ModulePriority.Infrastructure,
+            subPriority: 10, // High priority within infrastructure
+            canParallelInitialize: false, // Database should initialize alone
+            contextAdjustments: new()
+            {
+                ["Development"] = -5, // Slightly higher priority in development
+                ["Testing"] = -10 // Even higher priority in testing
+            },
+            tags: new() { "database", "infrastructure", "critical" }
+        );
+    }
     
     /// <summary>
     /// Configure database services.
