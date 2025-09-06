@@ -1,6 +1,7 @@
 using BurbujaEngine.Configuration;
 using BurbujaEngine.Engine.Extensions;
 using BurbujaEngine.Engine.Core;
+using BurbujaEngine.Engine.Modules;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -9,6 +10,10 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+// Add Blazor services for real-time monitoring
+builder.Services.AddRazorPages();
+builder.Services.AddServerSideBlazor();
+
 // Add CORS
 builder.Services.AddCors();
 
@@ -16,16 +21,18 @@ builder.Services.AddCors();
 builder.Services.AddSingleton<EnvironmentConfig>();
 
 // Add BurbujaEngine with module registration 
+// MICROKERNEL PRINCIPLE: Fault Isolation - Engine continues running even if modules fail
 builder.Services.AddBurbujaEngine(Guid.NewGuid())
     .WithConfiguration(config =>
     {
         config.WithVersion("1.0.0")
               .WithModuleTimeout(TimeSpan.FromMinutes(2))
               .WithShutdownTimeout(TimeSpan.FromMinutes(1))
-              .ContinueOnModuleFailure(false)
+              .ContinueOnModuleFailure(true)  
               .EnableParallelInitialization(true);
     })
-    .AddDatabaseModule()  
+    .AddDatabaseModule()
+    .AddMonitorModule()   // Add the new Monitor module
     .BuildEngine();       // Build the engine with all configured modules
 
 var app = builder.Build();
@@ -53,11 +60,95 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseStaticFiles(); // Add static files support for CSS
+app.UseRouting();
 app.UseAuthorization();
+
 app.MapControllers();
+app.MapRazorPages();
+app.MapBlazorHub(); // Add Blazor hub for real-time updates
 
 // Map engine endpoints for monitoring and diagnostics
 app.MapEngineEndpoints("/engine");
+
+// Monitor dashboard route
+app.MapGet("/monitor", () => Results.Redirect("/monitor/dashboard"));
+app.MapGet("/monitor/dashboard", (HttpContext context) =>
+{
+    // Serve the monitor dashboard HTML directly
+    var html = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Burbuja Engine Monitor</title>
+    <link href="/css/monitor.css" rel="stylesheet" />
+    <script src="_framework/blazor.server.js"></script>
+</head>
+<body>
+    <div id="app">
+        <component type="typeof(BurbujaEngine.Components.Monitor.MonitorDashboard)" render-mode="ServerPrerendered" />
+    </div>
+
+    <div id="blazor-error-ui">
+        An error has occurred. This application may no longer respond until reloaded.
+        <a href="" class="reload">Reload</a>
+        <a class="dismiss">🗙</a>
+    </div>
+
+    <style>
+        #blazor-error-ui {
+            background: lightyellow;
+            bottom: 0;
+            box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
+            display: none;
+            left: 0;
+            padding: 0.6rem 1.25rem 0.7rem 1.25rem;
+            position: fixed;
+            width: 100%;
+            z-index: 1000;
+        }
+
+        #blazor-error-ui .dismiss {
+            cursor: pointer;
+            position: absolute;
+            right: 0.75rem;
+            top: 0.5rem;
+        }
+    </style>
+</body>
+</html>
+""";
+    context.Response.ContentType = "text/html";
+    return context.Response.WriteAsync(html);
+});
+
+// Monitor API endpoints for real-time data
+app.MapGet("/api/monitor/status", (IServiceProvider serviceProvider) =>
+{
+    try
+    {
+        var monitorModule = serviceProvider.GetService<MonitorModule>();
+        if (monitorModule == null)
+        {
+            return Results.NotFound("Monitor module not available");
+        }
+
+        return Results.Ok(new
+        {
+            ModuleId = monitorModule.ModuleId,
+            ModuleName = monitorModule.ModuleName,
+            State = monitorModule.State.ToString(),
+            IsAvailable = true,
+            LastUpdate = DateTime.UtcNow
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(ex.Message);
+    }
+});
 
 // Stress test endpoint
 app.MapPost("/engine/stress-test", async (IServiceProvider serviceProvider) =>

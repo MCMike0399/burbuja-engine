@@ -134,6 +134,19 @@ public static class EngineModuleExtensions
         // Register the database module
         return builder.AddEngineModule<DatabaseModule>();
     }
+    
+    /// <summary>
+    /// Add the Monitor module to the engine.
+    /// This module provides comprehensive monitoring and real-time dashboards for the engine.
+    /// </summary>
+    public static EngineBuilder AddMonitorModule(this EngineBuilder builder)
+    {
+        if (builder == null) throw new ArgumentNullException(nameof(builder));
+        
+        // Register the monitor module - it has no external dependencies
+        // The module will register itself as a hosted service during ConfigureServices
+        return builder.AddEngineModule<MonitorModule>();
+    }
 }
 
 /// <summary>

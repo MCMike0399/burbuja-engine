@@ -1,0 +1,447 @@
+@page "/monitor"
+@using BurbujaEngine.Engine.Modules
+@using BurbujaEngine.Engine.Core
+@using Microsoft.Extensions.DependencyInjection
+@using Microsoft.JSInterop
+@inject IServiceProvider ServiceProvider
+@implements IDisposable
+
+<div class="monitor-dashboard">
+    <header class="dashboard-header">
+        <h1>🚀 Burbuja Engine Monitor</h1>
+        <div class="header-info">
+            <span class="engine-status @GetStatusClass(EngineHealth?.Status)">
+                @(EngineHealth?.Status ?? "Unknown")
+            </span>
+            <span class="last-update">
+                Last updated: @DateTime.Now.ToString("HH:mm:ss")
+            </span>
+        </div>
+    </header>
+
+    @if (IsLoading)
+    {
+        <div class="loading-container">
+            <div class="loading-spinner"></div>
+            <p>Loading engine monitoring data...</p>
+        </div>
+    }
+    else
+    {
+        <div class="dashboard-grid">
+            <!-- Engine Health Overview -->
+            <div class="card health-overview">
+                <div class="card-header">
+                    <h3>🏥 Engine Health</h3>
+                    <span class="health-badge @GetStatusClass(EngineHealth?.Status)">
+                        @(EngineHealth?.Status ?? "Unknown")
+                    </span>
+                </div>
+                <div class="card-content">
+                    @if (EngineHealth != null)
+                    {
+                        <div class="health-stats">
+                            <div class="stat">
+                                <span class="stat-label">Uptime</span>
+                                <span class="stat-value">@FormatUptime(EngineHealth.Uptime)</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-label">Version</span>
+                                <span class="stat-value">@EngineHealth.Version</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-label">Modules</span>
+                                <span class="stat-value">@EngineHealth.ModuleCount</span>
+                            </div>
+                        </div>
+                        <div class="module-health-summary">
+                            <div class="health-item healthy">
+                                <span class="count">@EngineHealth.HealthyModules</span>
+                                <span class="label">Healthy</span>
+                            </div>
+                            <div class="health-item warning">
+                                <span class="count">@EngineHealth.WarningModules</span>
+                                <span class="label">Warning</span>
+                            </div>
+                            <div class="health-item unhealthy">
+                                <span class="count">@EngineHealth.UnhealthyModules</span>
+                                <span class="label">Unhealthy</span>
+                            </div>
+                        </div>
+                        <p class="health-message">@EngineHealth.Message</p>
+                    }
+                    else
+                    {
+                        <p class="error-message">Unable to retrieve engine health information</p>
+                    }
+                </div>
+            </div>
+
+            <!-- System Resources -->
+            <div class="card system-resources">
+                <div class="card-header">
+                    <h3>💻 System Resources</h3>
+                </div>
+                <div class="card-content">
+                    @if (SystemResources != null)
+                    {
+                        <div class="resource-grid">
+                            <div class="resource-item">
+                                <div class="resource-label">CPU Usage</div>
+                                <div class="resource-bar">
+                                    <div class="resource-fill" style="width: @(Math.Max(0, SystemResources.CpuUsagePercent))%"></div>
+                                </div>
+                                <div class="resource-value">@SystemResources.CpuUsagePercent.ToString("F1")%</div>
+                            </div>
+                            <div class="resource-item">
+                                <div class="resource-label">Memory</div>
+                                <div class="resource-value">@SystemResources.MemoryUsageMB MB</div>
+                            </div>
+                            <div class="resource-item">
+                                <div class="resource-label">Threads</div>
+                                <div class="resource-value">@SystemResources.ThreadCount</div>
+                            </div>
+                            <div class="resource-item">
+                                <div class="resource-label">Handles</div>
+                                <div class="resource-value">@SystemResources.HandleCount</div>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="error-message">Unable to retrieve system resource information</p>
+                    }
+                </div>
+            </div>
+
+            <!-- Modules Status -->
+            <div class="card modules-status">
+                <div class="card-header">
+                    <h3>🧩 Modules Status</h3>
+                    <span class="module-count">@(ModuleInfos?.Count ?? 0) modules</span>
+                </div>
+                <div class="card-content">
+                    @if (ModuleInfos != null && ModuleInfos.Any())
+                    {
+                        <div class="modules-list">
+                            @foreach (var module in ModuleInfos)
+                            {
+                                <div class="module-item">
+                                    <div class="module-header">
+                                        <span class="module-name">@module.ModuleName</span>
+                                        <span class="module-status @GetStatusClass(module.HealthStatus)">
+                                            @module.HealthStatus
+                                        </span>
+                                    </div>
+                                    <div class="module-details">
+                                        <div class="module-info">
+                                            <span class="info-item">State: @module.State</span>
+                                            <span class="info-item">Version: @module.Version</span>
+                                            <span class="info-item">Priority: @module.Priority</span>
+                                            @if (module.Uptime.HasValue)
+                                            {
+                                                <span class="info-item">Uptime: @FormatUptime(module.Uptime)</span>
+                                            }
+                                        </div>
+                                        @if (!string.IsNullOrEmpty(module.HealthMessage))
+                                        {
+                                            <div class="module-health-message">@module.HealthMessage</div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="no-data">No module information available</p>
+                    }
+                </div>
+            </div>
+
+            <!-- Metrics -->
+            <div class="card metrics">
+                <div class="card-header">
+                    <h3>📊 Metrics</h3>
+                    <span class="metrics-count">@(CurrentMetrics?.Count ?? 0) metrics</span>
+                </div>
+                <div class="card-content">
+                    @if (CurrentMetrics != null && CurrentMetrics.Any())
+                    {
+                        <div class="metrics-grid">
+                            @foreach (var metric in CurrentMetrics.Take(8))
+                            {
+                                <div class="metric-item">
+                                    <div class="metric-name">@metric.Key</div>
+                                    <div class="metric-value">@FormatMetricValue(metric.Value)</div>
+                                </div>
+                            }
+                        </div>
+                        @if (CurrentMetrics.Count > 8)
+                        {
+                            <p class="more-metrics">... and @(CurrentMetrics.Count - 8) more metrics</p>
+                        }
+                    }
+                    else
+                    {
+                        <p class="no-data">No metrics available</p>
+                    }
+                </div>
+            </div>
+
+            <!-- Recent Events -->
+            <div class="card recent-events">
+                <div class="card-header">
+                    <h3>📝 Recent Events</h3>
+                    <span class="events-count">@(RecentEvents?.Count ?? 0) events</span>
+                </div>
+                <div class="card-content">
+                    @if (RecentEvents != null && RecentEvents.Any())
+                    {
+                        <div class="events-list">
+                            @foreach (var evt in RecentEvents.Take(10))
+                            {
+                                <div class="event-item">
+                                    <div class="event-header">
+                                        <span class="event-type">@evt.EventType</span>
+                                        <span class="event-time">@evt.Timestamp.ToString("HH:mm:ss")</span>
+                                    </div>
+                                    <div class="event-message">@evt.Message</div>
+                                    <div class="event-source">Source: @evt.Source</div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="no-data">No recent events</p>
+                    }
+                </div>
+            </div>
+
+            <!-- Monitor Module Status -->
+            <div class="card monitor-status">
+                <div class="card-header">
+                    <h3>🔍 Monitor Status</h3>
+                </div>
+                <div class="card-content">
+                    @if (MonitorModule != null)
+                    {
+                        <div class="monitor-stats">
+                            <div class="stat">
+                                <span class="stat-label">Status</span>
+                                <span class="stat-value @GetStatusClass(MonitorModule.State.ToString())">
+                                    @MonitorModule.State
+                                </span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-label">Metrics Collected</span>
+                                <span class="stat-value">@(MonitorModule.GetMetric<long?>("TotalMetricsCollected") ?? 0L)</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-label">Health Checks</span>
+                                <span class="stat-value">@(MonitorModule.GetMetric<long?>("TotalHealthChecks") ?? 0L)</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-label">Errors</span>
+                                <span class="stat-value">@(MonitorModule.GetMetric<long?>("TotalErrors") ?? 0L)</span>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="error-message">Monitor module not available</p>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private MonitorModule? MonitorModule { get; set; }
+    private EngineHealthSummary? EngineHealth { get; set; }
+    private List<ModuleInfo>? ModuleInfos { get; set; }
+    private SystemResourceUsage? SystemResources { get; set; }
+    private Dictionary<string, object>? CurrentMetrics { get; set; }
+    private List<MonitorEvent>? RecentEvents { get; set; }
+    private bool IsLoading { get; set; } = true;
+    private Timer? RefreshTimer { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // Get the monitor module from DI
+            MonitorModule = ServiceProvider.GetService<MonitorModule>();
+            
+            if (MonitorModule == null)
+            {
+                // Try to get it from the engine
+                var engine = ServiceProvider.GetService<IBurbujaEngine>();
+                MonitorModule = engine?.GetModule<MonitorModule>();
+            }
+
+            await LoadDashboardData();
+            
+            // Set up refresh timer
+            RefreshTimer = new Timer(async _ => await InvokeAsync(RefreshData), null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error initializing monitor dashboard: {ex.Message}");
+        }
+        finally
+        {
+            IsLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadDashboardData()
+    {
+        if (MonitorModule == null) return;
+
+        try
+        {
+            // Load all data in parallel
+            var tasks = new[]
+            {
+                LoadEngineHealth(),
+                LoadModuleInformation(),
+                LoadSystemResources(),
+                LoadMetrics(),
+                LoadRecentEvents()
+            };
+
+            await Task.WhenAll(tasks);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading dashboard data: {ex.Message}");
+        }
+    }
+
+    private async Task LoadEngineHealth()
+    {
+        try
+        {
+            EngineHealth = await MonitorModule!.GetEngineHealthSummary();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading engine health: {ex.Message}");
+        }
+    }
+
+    private async Task LoadModuleInformation()
+    {
+        try
+        {
+            ModuleInfos = await MonitorModule!.GetModuleInformation();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading module information: {ex.Message}");
+        }
+    }
+
+    private Task LoadSystemResources()
+    {
+        try
+        {
+            SystemResources = MonitorModule!.GetSystemResourceUsage();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading system resources: {ex.Message}");
+        }
+        return Task.CompletedTask;
+    }
+
+    private Task LoadMetrics()
+    {
+        try
+        {
+            CurrentMetrics = MonitorModule!.GetMetrics();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading metrics: {ex.Message}");
+        }
+        return Task.CompletedTask;
+    }
+
+    private Task LoadRecentEvents()
+    {
+        try
+        {
+            RecentEvents = MonitorModule!.GetRecentEvents(20);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading recent events: {ex.Message}");
+        }
+        return Task.CompletedTask;
+    }
+
+    private async Task RefreshData()
+    {
+        try
+        {
+            await LoadDashboardData();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error refreshing data: {ex.Message}");
+        }
+    }
+
+    private string GetStatusClass(string? status)
+    {
+        return status?.ToLowerInvariant() switch
+        {
+            "healthy" or "running" => "status-healthy",
+            "warning" or "initialized" or "stopped" => "status-warning",
+            "unhealthy" or "error" => "status-unhealthy",
+            "critical" => "status-critical",
+            _ => "status-unknown"
+        };
+    }
+
+    private string FormatUptime(TimeSpan? uptime)
+    {
+        if (!uptime.HasValue) return "N/A";
+        
+        var span = uptime.Value;
+        if (span.TotalDays >= 1)
+            return $"{(int)span.TotalDays}d {span.Hours}h {span.Minutes}m";
+        if (span.TotalHours >= 1)
+            return $"{span.Hours}h {span.Minutes}m {span.Seconds}s";
+        if (span.TotalMinutes >= 1)
+            return $"{span.Minutes}m {span.Seconds}s";
+        return $"{span.Seconds}s";
+    }
+
+    private string FormatMetricValue(object value)
+    {
+        return value switch
+        {
+            DateTime dt => dt.ToString("HH:mm:ss"),
+            TimeSpan ts => FormatUptime(ts),
+            double d => d.ToString("F2"),
+            float f => f.ToString("F2"),
+            long l => l.ToString("N0"),
+            int i => i.ToString("N0"),
+            bool b => b ? "Yes" : "No",
+            null => "N/A",
+            _ => value.ToString() ?? "N/A"
+        };
+    }
+
+    public void Dispose()
+    {
+        RefreshTimer?.Dispose();
+    }
+}
