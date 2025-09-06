@@ -1,0 +1,309 @@
+@page "/monitor"
+@using BurbujaEngine.Monitor.Services
+@using BurbujaEngine.Monitor.Core
+@using BurbujaEngine.Engine.Core
+@using Microsoft.Extensions.DependencyInjection
+@using Microsoft.JSInterop
+@inject IServiceProvider ServiceProvider
+@implements IDisposable
+
+<div class="monitor-dashboard">
+    <header class="dashboard-header">
+        <h1>🚀 Burbuja Engine Monitor</h1>
+        <div class="header-info">
+            <span class="engine-status @GetStatusClass(DashboardData?.EngineHealth?.IsHealthy)">
+                @(DashboardData?.EngineHealth?.State ?? "Unknown")
+            </span>
+            <span class="last-update">
+                Last updated: @DateTime.Now.ToString("HH:mm:ss")
+            </span>
+        </div>
+    </header>
+
+    @if (IsLoading)
+    {
+        <div class="loading-container">
+            <div class="loading-spinner"></div>
+            <p>Loading engine monitoring data...</p>
+        </div>
+    }
+    else if (DashboardData == null)
+    {
+        <div class="error-container">
+            <h3>❌ Monitor Service Unavailable</h3>
+            <p>The monitoring service is not available. The engine may be starting up or experiencing issues.</p>
+            <button class="btn btn-primary" @onclick="RefreshData">🔄 Retry</button>
+        </div>
+    }
+    else
+    {
+        <div class="dashboard-grid">
+            <!-- Engine Health Overview -->
+            <div class="card health-overview">
+                <div class="card-header">
+                    <h3>🏥 Engine Health</h3>
+                    <span class="health-badge @GetStatusClass(DashboardData.EngineHealth.IsHealthy)">
+                        @DashboardData.EngineHealth.State
+                    </span>
+                </div>
+                <div class="card-content">
+                    <div class="health-stats">
+                        <div class="stat">
+                            <span class="stat-label">Engine ID</span>
+                            <span class="stat-value">@DashboardData.EngineHealth.EngineId[..8]...</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-label">Uptime</span>
+                            <span class="stat-value">@FormatUptime(DashboardData.EngineHealth.Uptime)</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-label">Total Modules</span>
+                            <span class="stat-value">@DashboardData.EngineHealth.TotalModules</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-label">Healthy</span>
+                            <span class="stat-value healthy">@DashboardData.EngineHealth.HealthyModules</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-label">Warning</span>
+                            <span class="stat-value warning">@DashboardData.EngineHealth.WarningModules</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-label">Unhealthy</span>
+                            <span class="stat-value error">@DashboardData.EngineHealth.UnhealthyModules</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- System Metrics -->
+            <div class="card metrics-overview">
+                <div class="card-header">
+                    <h3>📊 System Metrics</h3>
+                    <span class="metrics-timestamp">@DashboardData.CurrentMetrics.Timestamp.ToString("HH:mm:ss")</span>
+                </div>
+                <div class="card-content">
+                    <div class="metrics-grid">
+                        <div class="metric">
+                            <span class="metric-label">CPU Usage</span>
+                            <div class="metric-value">
+                                <span class="value">@DashboardData.CurrentMetrics.CpuUsagePercent.ToString("F1")%</span>
+                                <div class="progress-bar">
+                                    <div class="progress-fill" style="width: @DashboardData.CurrentMetrics.CpuUsagePercent%"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Memory Usage</span>
+                            <div class="metric-value">
+                                <span class="value">@DashboardData.CurrentMetrics.MemoryUsagePercent.ToString("F1")%</span>
+                                <div class="progress-bar">
+                                    <div class="progress-fill" style="width: @DashboardData.CurrentMetrics.MemoryUsagePercent%"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Memory Used</span>
+                            <span class="metric-value">@FormatBytes(DashboardData.CurrentMetrics.MemoryUsedBytes)</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Thread Count</span>
+                            <span class="metric-value">@DashboardData.CurrentMetrics.ThreadCount</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Handle Count</span>
+                            <span class="metric-value">@DashboardData.CurrentMetrics.HandleCount</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Process Uptime</span>
+                            <span class="metric-value">@FormatUptime(DashboardData.CurrentMetrics.ProcessUptime)</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Module Status -->
+            <div class="card modules-overview">
+                <div class="card-header">
+                    <h3>🧩 Module Status</h3>
+                    <span class="module-count">@DashboardData.ModuleHealth.Count() modules</span>
+                </div>
+                <div class="card-content">
+                    <div class="modules-grid">
+                        @foreach (var module in DashboardData.ModuleHealth)
+                        {
+                            <div class="module-card @GetModuleStatusClass(module.HealthStatus)">
+                                <div class="module-header">
+                                    <h4>@module.ModuleName</h4>
+                                    <span class="module-status">@module.HealthStatus</span>
+                                </div>
+                                <div class="module-info">
+                                    <p><strong>State:</strong> @module.State</p>
+                                    <p><strong>ID:</strong> @module.FriendlyId</p>
+                                    <p><strong>Health:</strong> @module.HealthMessage</p>
+                                    <p><strong>Updated:</strong> @module.LastUpdated.ToString("HH:mm:ss")</p>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Events -->
+            <div class="card events-overview">
+                <div class="card-header">
+                    <h3>📝 Recent Events</h3>
+                    <span class="events-count">@DashboardData.RecentEvents.Count() events</span>
+                </div>
+                <div class="card-content">
+                    <div class="events-list">
+                        @foreach (var eventItem in DashboardData.RecentEvents.Take(10))
+                        {
+                            <div class="event-item @GetEventSeverityClass(eventItem.Severity)">
+                                <div class="event-header">
+                                    <span class="event-title">@eventItem.Title</span>
+                                    <span class="event-time">@eventItem.Timestamp.ToString("HH:mm:ss")</span>
+                                </div>
+                                <div class="event-details">
+                                    <span class="event-category">[@eventItem.Category]</span>
+                                    <span class="event-message">@eventItem.Message</span>
+                                </div>
+                                @if (!string.IsNullOrEmpty(eventItem.RelatedModuleName))
+                                {
+                                    <div class="event-module">
+                                        Related: @eventItem.RelatedModuleName
+                                    </div>
+                                }
+                            </div>
+                        }
+                        @if (!DashboardData.RecentEvents.Any())
+                        {
+                            <div class="no-events">
+                                <p>No events recorded yet.</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private IMonitorService? _monitorService;
+    private MonitorDashboardData? DashboardData;
+    private bool IsLoading = true;
+    private Timer? _refreshTimer;
+    private readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(5);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // Try to get the monitor service
+            _monitorService = ServiceProvider.GetService<IMonitorService>();
+            
+            if (_monitorService == null)
+            {
+                // Try to get it from the engine
+                var engine = ServiceProvider.GetService<IBurbujaEngine>();
+                _monitorService = engine?.GetModule<MonitorModule>() as IMonitorService;
+            }
+
+            await RefreshData();
+            
+            // Set up auto-refresh
+            _refreshTimer = new Timer(async _ => await InvokeAsync(RefreshData), null, RefreshInterval, RefreshInterval);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error initializing monitor dashboard: {ex.Message}");
+            IsLoading = false;
+        }
+    }
+
+    private async Task RefreshData()
+    {
+        try
+        {
+            if (_monitorService != null)
+            {
+                DashboardData = await _monitorService.GetDashboardDataAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error refreshing dashboard data: {ex.Message}");
+            DashboardData = null;
+        }
+        finally
+        {
+            IsLoading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private string GetStatusClass(bool? isHealthy)
+    {
+        return isHealthy switch
+        {
+            true => "healthy",
+            false => "error",
+            _ => "unknown"
+        };
+    }
+
+    private string GetModuleStatusClass(string status)
+    {
+        return status.ToLower() switch
+        {
+            "healthy" => "module-healthy",
+            "warning" => "module-warning",
+            "unhealthy" or "critical" or "error" => "module-error",
+            _ => "module-unknown"
+        };
+    }
+
+    private string GetEventSeverityClass(string severity)
+    {
+        return severity.ToLower() switch
+        {
+            "info" => "event-info",
+            "warning" => "event-warning",
+            "error" => "event-error",
+            "critical" => "event-critical",
+            _ => "event-info"
+        };
+    }
+
+    private string FormatUptime(TimeSpan uptime)
+    {
+        if (uptime.TotalDays >= 1)
+            return $"{uptime.Days}d {uptime.Hours}h {uptime.Minutes}m";
+        if (uptime.TotalHours >= 1)
+            return $"{uptime.Hours}h {uptime.Minutes}m {uptime.Seconds}s";
+        if (uptime.TotalMinutes >= 1)
+            return $"{uptime.Minutes}m {uptime.Seconds}s";
+        return $"{uptime.Seconds}s";
+    }
+
+    private string FormatBytes(long bytes)
+    {
+        const long KB = 1024;
+        const long MB = KB * 1024;
+        const long GB = MB * 1024;
+
+        if (bytes >= GB)
+            return $"{bytes / (double)GB:F1} GB";
+        if (bytes >= MB)
+            return $"{bytes / (double)MB:F1} MB";
+        if (bytes >= KB)
+            return $"{bytes / (double)KB:F1} KB";
+        return $"{bytes} B";
+    }
+
+    public void Dispose()
+    {
+        _refreshTimer?.Dispose();
+    }
+}

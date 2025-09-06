@@ -143,9 +143,8 @@ public static class EngineModuleExtensions
     {
         if (builder == null) throw new ArgumentNullException(nameof(builder));
         
-        // Register the monitor module - it has no external dependencies
-        // The module will register itself as a hosted service during ConfigureServices
-        return builder.AddEngineModule<MonitorModule>();
+        // Use the new Monitor package
+        return builder.AddEngineModule<BurbujaEngine.Monitor.Services.MonitorModule>();
     }
 }
 
