@@ -1,6 +1,3 @@
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 using BurbujaEngine.Engine.Core;
 using BurbujaEngine.Engine.Modules;
 using BurbujaEngine.Database.Extensions;
@@ -9,13 +6,11 @@ namespace BurbujaEngine.Engine.Extensions;
 
 /// <summary>
 /// Extension methods for integrating BurbujaEngine with ASP.NET Core.
-/// Provides seamless integration following .NET conventions and industry standards.
 /// </summary>
 public static class EngineServiceExtensions
 {
     /// <summary>
     /// Add BurbujaEngine to the service collection without any modules.
-    /// This is the core engine registration that follows ASP.NET Core patterns.
     /// Modules should be added explicitly using AddEngineModule<T>() methods.
     /// </summary>
     public static EngineBuilder AddBurbujaEngine(
@@ -47,28 +42,6 @@ public static class EngineServiceExtensions
         
         var builder = new EngineBuilder(engineId, services)
             .WithConfiguration(configureEngine);
-        
-        // Register hosted service for engine lifecycle management
-        services.AddHostedService<EngineHostedService>();
-        
-        return builder;
-    }
-    
-    /// <summary>
-    /// DEPRECATED: Use AddBurbujaEngine().AddDatabaseModule().BuildEngine() pattern instead.
-    /// This method is kept for backward compatibility.
-    /// </summary>
-    [Obsolete("Use the fluent builder pattern: services.AddBurbujaEngine().AddDatabaseModule().BuildEngine()")]
-    public static EngineBuilder AddBurbujaEngine(
-        this IServiceCollection services,
-        Guid engineId,
-        Action<EngineBuilder> configure)
-    {
-        if (services == null) throw new ArgumentNullException(nameof(services));
-        if (configure == null) throw new ArgumentNullException(nameof(configure));
-        
-        var builder = new EngineBuilder(engineId, services);
-        configure(builder);
         
         // Register hosted service for engine lifecycle management
         services.AddHostedService<EngineHostedService>();
