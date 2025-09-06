@@ -6,6 +6,24 @@ namespace BurbujaEngine.Engine.Microkernel;
 
 /// <summary>
 /// Implementation of the driver registry for managing driver instances.
+/// 
+/// MICROKERNEL PATTERN: Step 6 - Service Management
+/// 
+/// This class implements the microkernel's service management responsibilities:
+/// - Dynamic driver registration and discovery
+/// - Type-based driver lookup and indexing
+/// - State monitoring and health validation
+/// - Statistical reporting for system monitoring
+/// 
+/// SERVICE MANAGEMENT PRINCIPLES:
+/// - Registry pattern: Central registration point for all user-space drivers
+/// - Type safety: Strong typing with generic access methods
+/// - Lifecycle tracking: Monitors driver state changes and health
+/// - Resource management: Proper cleanup and disposal handling
+/// - Performance optimization: Efficient lookup structures for driver discovery
+/// 
+/// This represents another core microkernel service that provides essential
+/// infrastructure for managing the dynamic set of user-space components.
 /// </summary>
 public class DriverRegistry : IDriverRegistry, IDisposable
 {

@@ -4,7 +4,34 @@ namespace BurbujaEngine.Engine.Core;
 
 /// <summary>
 /// Base implementation for engine modules with integrated unified priority support.
-/// Provides common functionality for all engine modules including semantic priority management.
+/// 
+/// MICROKERNEL PATTERN: Step 3 - Modularize Services Implementation
+/// 
+/// This base class provides the common implementation for user-space modules in the
+/// microkernel architecture. It demonstrates key microkernel principles:
+/// 
+/// USER-SPACE MODULE CHARACTERISTICS:
+/// - Independent lifecycle: Modules can initialize, start, stop independently
+/// - Microkernel service access: Uses IModuleContext to access kernel services
+/// - Priority-based ordering: Sophisticated priority system for initialization order
+/// - Health monitoring: Built-in health checks and diagnostics
+/// - Error isolation: Module failures don't affect other modules or the microkernel
+/// - State management: Clean state transitions with event notifications
+/// 
+/// TEMPLATE METHOD PATTERN:
+/// - OnInitializeAsync(): Module-specific initialization logic
+/// - OnStartAsync(): Module-specific startup logic  
+/// - OnStopAsync(): Module-specific shutdown logic
+/// - OnGetHealthAsync(): Module-specific health checks
+/// 
+/// MICROKERNEL INTEGRATION:
+/// - Service configuration: Modules can register services with the DI container
+/// - Context access: Controlled access to microkernel services and configuration
+/// - Event system: State change notifications for coordination
+/// - Priority system: Advanced priority management for complex initialization scenarios
+/// 
+/// This base class enables developers to focus on business logic while the microkernel
+/// handles infrastructure concerns like logging, health monitoring, and lifecycle management.
 /// </summary>
 public abstract class BaseEngineModule : IEngineModule, IModulePriorityModule, IDisposable
 {

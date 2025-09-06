@@ -6,7 +6,23 @@ namespace BurbujaEngine.Engine.Microkernel;
 
 /// <summary>
 /// Implementation of the inter-driver communication bus.
-/// Provides microkernel-style IPC between drivers.
+/// 
+/// MICROKERNEL PATTERN: Step 4 - Inter-Process Communication (IPC)
+/// 
+/// This class implements the critical microkernel IPC mechanism that enables:
+/// - Message passing between user-space drivers and services
+/// - Asynchronous communication with timeout support
+/// - Broadcast messaging for system-wide notifications
+/// - Handler registration for specific message types
+/// 
+/// IPC DESIGN PRINCIPLES:
+/// - Minimal overhead: Direct message routing without excessive processing
+/// - Fault tolerance: Isolated failures don't cascade across the system
+/// - Performance optimization: Concurrent message handling and response caching
+/// - Security: Message validation and controlled access between components
+/// 
+/// This represents a core microkernel service that must remain in kernel space
+/// to provide reliable communication infrastructure for all user-space components.
 /// </summary>
 public class DriverCommunicationBus : IDriverCommunicationBus, IDisposable
 {
@@ -27,6 +43,15 @@ public class DriverCommunicationBus : IDriverCommunicationBus, IDisposable
     
     /// <summary>
     /// Send a message to a specific driver.
+    /// 
+    /// MICROKERNEL IPC: This method implements the core message-passing mechanism
+    /// that allows user-space drivers to communicate through the microkernel.
+    /// 
+    /// IPC FEATURES:
+    /// - Direct routing: Messages are routed directly to target drivers
+    /// - Handler resolution: Supports both specific handlers and general message handling
+    /// - Error handling: Returns error responses for failed message delivery
+    /// - Logging: Comprehensive logging for debugging and monitoring
     /// </summary>
     public async Task<DriverMessage?> SendMessageAsync(DriverMessage message, CancellationToken cancellationToken = default)
     {

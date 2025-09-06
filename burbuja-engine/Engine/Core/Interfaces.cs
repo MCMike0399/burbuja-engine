@@ -6,6 +6,27 @@ namespace BurbujaEngine.Engine.Core;
 
 /// <summary>
 /// Core interface for all engine modules.
+/// 
+/// MICROKERNEL PATTERN: Step 2 - Design Interfaces
+/// 
+/// This interface represents the fundamental contract between the microkernel
+/// and user-space modules. It defines the well-structured interface that enables:
+/// 
+/// - Module lifecycle management (initialize, start, stop, shutdown)
+/// - Dependency declaration and resolution
+/// - Health monitoring and diagnostics
+/// - Service configuration and registration
+/// - Event-driven state communication
+/// 
+/// INTERFACE DESIGN PRINCIPLES:
+/// - Stability: Interface remains stable while implementations can evolve
+/// - Completeness: Covers all aspects of module lifecycle
+/// - Modularity: Modules can be developed, tested, and deployed independently
+/// - Observability: Built-in health and diagnostic capabilities
+/// 
+/// This demonstrates the microkernel architecture principle of clean separation
+/// between core functionality (provided by the microkernel) and extended
+/// functionality (provided by user-space modules through this interface).
 /// </summary>
 public interface IEngineModule
 {
@@ -90,6 +111,23 @@ public interface IEngineModule
 /// <summary>
 /// Context provided to modules during initialization.
 /// Contains all necessary dependencies and configuration.
+/// 
+/// MICROKERNEL PATTERN: Step 2 - Interface Design for Microkernel Services
+/// 
+/// This context interface represents how the microkernel exposes its core services
+/// to user-space modules in a controlled and well-defined manner:
+/// 
+/// - Service Provider: Dependency injection container access
+/// - Logger Factory: Centralized logging infrastructure
+/// - Configuration: Access to system-wide configuration
+/// - Cancellation Token: Cooperative cancellation support
+/// - Engine Reference: Access to microkernel services and other modules
+/// 
+/// CONTEXT PATTERN BENEFITS:
+/// - Controlled access: Modules only get what they need from the microkernel
+/// - Service abstraction: Modules don't directly depend on microkernel internals
+/// - Testing support: Context can be mocked for unit testing
+/// - Security boundary: Limits what user-space code can access
 /// </summary>
 public interface IModuleContext
 {
@@ -121,6 +159,39 @@ public interface IModuleContext
 
 /// <summary>
 /// Main engine interface that implements microkernel architecture.
+/// 
+/// MICROKERNEL PATTERN: Complete Implementation
+/// 
+/// This interface represents the MICROKERNEL itself - the minimal, essential core
+/// that manages all user-space services and provides fundamental system services:
+/// 
+/// Step 1 - Core Functionality:
+/// - Module lifecycle management (register, initialize, start, stop, shutdown)
+/// - Driver management and coordination
+/// - State management and monitoring
+/// 
+/// Step 2 - Well-Defined Interfaces:
+/// - Clean contracts for module and driver interaction
+/// - Context-based service provisioning
+/// - Event-driven communication
+/// 
+/// Step 4 - Inter-Process Communication:
+/// - Driver communication bus for message passing
+/// - Service provider for dependency injection
+/// - Event system for state changes
+/// 
+/// Step 6 - Service Management:
+/// - Dynamic service registration and discovery
+/// - Dependency-aware initialization
+/// - Health monitoring and diagnostics
+/// 
+/// MICROKERNEL CHARACTERISTICS:
+/// - Minimal core: Only essential services remain in the microkernel
+/// - User-space modules: Business logic, data access, etc. run as modules
+/// - IPC infrastructure: Robust communication between components
+/// - Fault isolation: Module failures don't crash the microkernel
+/// - Modularity: Easy to add, remove, or update functionality
+/// 
 /// This IS the microkernel - managing modules, drivers, and providing core IPC services.
 /// </summary>
 public interface IBurbujaEngine

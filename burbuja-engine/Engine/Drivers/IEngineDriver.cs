@@ -6,7 +6,37 @@ namespace BurbujaEngine.Engine.Drivers;
 
 /// <summary>
 /// Base interface for all engine drivers.
-/// Drivers provide hardware/external service abstraction layer for the microkernel.
+/// 
+/// MICROKERNEL PATTERN: Step 5 - Device Drivers in User Space
+/// 
+/// Drivers represent the hardware/external service abstraction layer in the microkernel
+/// architecture. They operate in user space but provide controlled access to system
+/// resources through the microkernel's IPC mechanisms.
+/// 
+/// DRIVER ARCHITECTURE BENEFITS:
+/// - Isolation: Driver failures don't crash the microkernel or other drivers
+/// - Modularity: Drivers can be updated independently of the core system
+/// - Flexibility: Easy to add support for new hardware or external services
+/// - Security: Drivers operate with limited privileges through microkernel APIs
+/// 
+/// USER-SPACE DRIVER CHARACTERISTICS:
+/// - Hardware abstraction: Provide clean interfaces to hardware/external systems
+/// - Message handling: Support IPC communication with other system components
+/// - Lifecycle management: Initialize, start, stop, and shutdown cleanly
+/// - Health monitoring: Report status and handle error conditions gracefully
+/// - Service configuration: Register services they provide with the DI container
+/// 
+/// DRIVER TYPES SUPPORTED:
+/// - Database drivers (MongoDB, SQL Server, etc.)
+/// - Network communication drivers  
+/// - Storage and file system drivers
+/// - Security and authentication drivers
+/// - External API integration drivers
+/// - Custom plugin drivers
+/// 
+/// This interface demonstrates the microkernel principle of moving complex,
+/// non-essential functionality out of the kernel and into user space where
+/// it can be managed more safely and flexibly.
 /// </summary>
 public interface IEngineDriver
 {
@@ -196,6 +226,20 @@ public enum DriverState
 /// <summary>
 /// Context provided to drivers during initialization.
 /// Contains microkernel services and configuration.
+/// 
+/// MICROKERNEL PATTERN: Step 2 - Interface Design for Driver-Kernel Communication
+/// 
+/// This context provides drivers with controlled access to microkernel services:
+/// - Service Provider: Access to shared services through dependency injection
+/// - Logger Factory: Centralized logging infrastructure  
+/// - Configuration: System and driver-specific configuration
+/// - Engine Reference: Access to microkernel for service discovery
+/// - Communication Bus: IPC mechanism for inter-driver communication
+/// 
+/// SECURITY AND ISOLATION:
+/// - Controlled access: Drivers only get necessary microkernel services
+/// - Message passing: Communication happens through well-defined IPC channels
+/// - Service boundaries: Clear separation between kernel and user space
 /// </summary>
 public interface IDriverContext
 {

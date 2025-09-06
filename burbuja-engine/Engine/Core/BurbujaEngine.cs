@@ -8,9 +8,46 @@ using BurbujaEngine.Engine.Microkernel;
 namespace BurbujaEngine.Engine.Core;
 
 /// <summary>
-/// BurbujaEngine - A microkernel architecture implementation.
-/// Acts as the core microkernel managing modules and drivers with minimal overhead.
-/// Provides essential services: module/driver lifecycle, IPC, service management.
+/// BurbujaEngine - A microkernel architecture implementation following enterprise design patterns.
+/// 
+/// MICROKERNEL ARCHITECTURE COMPONENTS (Based on System Design Best Practices):
+/// 
+/// Step 1 - Core Functionality: This class implements the minimal microkernel with essential services:
+/// - Module lifecycle management (loading, initialization, startup, shutdown)
+/// - Driver registry and communication bus for IPC
+/// - Service coordination and dependency resolution
+/// - State management and health monitoring
+/// 
+/// Step 2 - Well-Defined Interfaces: Communicates with user-space modules through:
+/// - IEngineModule interface for module contracts
+/// - IModuleContext for providing microkernel services to modules
+/// - Event-driven communication for state changes
+/// 
+/// Step 4 - Inter-Process Communication (IPC): Implements robust IPC through:
+/// - DriverCommunicationBus for message passing between drivers
+/// - Event system for state change notifications
+/// - Service provider pattern for dependency injection
+/// 
+/// Step 6 - Service Management: Provides comprehensive service lifecycle management:
+/// - Dynamic module registration and unregistration
+/// - Dependency-aware initialization ordering
+/// - Graceful shutdown with proper cleanup
+/// - Health monitoring and diagnostics
+/// 
+/// Step 7 - Performance Optimization: Includes performance optimizations:
+/// - Parallel initialization support (configurable)
+/// - Efficient dependency resolution
+/// - Minimal context switching overhead
+/// - Asynchronous operations throughout
+/// 
+/// Step 8 - Security & Isolation: Implements security measures:
+/// - Module isolation through service boundaries
+/// - Controlled access to microkernel services via context
+/// - Error containment to prevent cascade failures
+/// 
+/// This microkernel serves as the foundation for a modular, extensible system where
+/// user-space modules (business logic, data access, etc.) operate independently
+/// while leveraging core microkernel services for communication and coordination.
 /// </summary>
 public class BurbujaEngine : IBurbujaEngine, IDisposable
 {
@@ -27,10 +64,11 @@ public class BurbujaEngine : IBurbujaEngine, IDisposable
     private DateTime? _startedAt;
     private CancellationTokenSource? _engineCancellationTokenSource;
     
-    // Microkernel components
-    private readonly IDriverRegistry _driverRegistry;
-    private readonly IDriverCommunicationBus _communicationBus;
-    private readonly IDriverFactory _driverFactory;
+    // Microkernel components - Step 1: Core Functionality
+    // These represent the minimal set of services that must remain in kernel space
+    private readonly IDriverRegistry _driverRegistry;          // Driver management service
+    private readonly IDriverCommunicationBus _communicationBus; // IPC mechanism (Step 4)
+    private readonly IDriverFactory _driverFactory;            // Driver instantiation service
     
     public Guid EngineId { get; }
     public string Version { get; }
@@ -104,6 +142,11 @@ public class BurbujaEngine : IBurbujaEngine, IDisposable
     
     /// <summary>
     /// Register a module with the engine.
+    /// 
+    /// MICROKERNEL PATTERN: Step 3 - Modularize Services
+    /// This method implements the core microkernel principle of dynamic service registration.
+    /// Modules represent user-space services that operate independently but can leverage
+    /// microkernel services through well-defined interfaces.
     /// </summary>
     public IBurbujaEngine RegisterModule(IEngineModule module)
     {
@@ -170,6 +213,16 @@ public class BurbujaEngine : IBurbujaEngine, IDisposable
     
     /// <summary>
     /// Initialize all modules in dependency order.
+    /// 
+    /// MICROKERNEL PATTERN: Step 6 - Service Management
+    /// Implements sophisticated service lifecycle management with:
+    /// - Dependency resolution to ensure proper initialization order
+    /// - Parallel initialization support for performance (configurable)
+    /// - Error handling and recovery mechanisms
+    /// - Comprehensive logging and monitoring
+    /// 
+    /// This demonstrates the microkernel's role in coordinating user-space services
+    /// while maintaining minimal core functionality.
     /// </summary>
     public async Task<EngineResult> InitializeAsync(CancellationToken cancellationToken = default)
     {
@@ -753,6 +806,14 @@ public class BurbujaEngine : IBurbujaEngine, IDisposable
     
     /// <summary>
     /// Register a driver with the microkernel.
+    /// 
+    /// MICROKERNEL PATTERN: Step 5 - Device Drivers in User Space
+    /// Drivers represent hardware/external service abstractions that run in user space
+    /// but communicate with the microkernel through well-defined interfaces.
+    /// This separation allows for:
+    /// - Easy driver updates without kernel changes
+    /// - Better fault isolation (driver crashes don't crash kernel)
+    /// - Modular driver architecture
     /// </summary>
     public async Task<DriverResult> RegisterDriverAsync(IEngineDriver driver)
     {

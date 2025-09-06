@@ -7,8 +7,33 @@ using BurbujaEngine.Engine.Core;
 namespace BurbujaEngine.Engine.Modules;
 
 /// <summary>
-/// Database module for BurbujaEngine.
-/// Manages database connections and provides database services to other modules.
+/// Database module for BurbujaEngine - A User-Space Service Example.
+/// 
+/// MICROKERNEL PATTERN: Step 3 - Modularize Services (Practical Example)
+/// 
+/// This module demonstrates how complex functionality (database access) is implemented
+/// as a user-space service in the microkernel architecture:
+/// 
+/// USER-SPACE SERVICE CHARACTERISTICS:
+/// - Business Logic: Encapsulates all database-related functionality
+/// - Microkernel Integration: Uses microkernel services through IModuleContext
+/// - Service Provision: Registers database services for other modules to use
+/// - Health Monitoring: Provides detailed health checks for database connectivity
+/// - Error Isolation: Database failures don't crash the microkernel or other modules
+/// 
+/// MODULAR DESIGN BENEFITS:
+/// - Independent Development: Can be developed and tested separately
+/// - Easy Updates: Database logic can be updated without touching the microkernel
+/// - Fault Tolerance: Module failures are contained and reported
+/// - Reusability: Can be reused across different engine configurations
+/// 
+/// INFRASTRUCTURE MODULE PRIORITY:
+/// - High Priority: Database is critical infrastructure other modules depend on
+/// - Context-Aware: Priority adjusts based on execution environment
+/// - Dependency Coordination: Initializes before modules that need database access
+/// 
+/// This exemplifies how the microkernel architecture enables building complex,
+/// enterprise-grade systems with clean separation of concerns.
 /// </summary>
 public class DatabaseModule : BaseEngineModule
 {
