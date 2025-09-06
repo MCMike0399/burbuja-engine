@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using BurbujaEngine.Engine.Drivers;
 
 namespace BurbujaEngine.Engine.Core;
 
@@ -119,35 +120,50 @@ public interface IModuleContext
 }
 
 /// <summary>
-/// Main engine interface that manages the application lifecycle.
-/// This is the heart of the BurbujaEngine infrastructure.
+/// Main engine interface that implements microkernel architecture.
+/// This IS the microkernel - managing modules, drivers, and providing core IPC services.
 /// </summary>
 public interface IBurbujaEngine
 {
     /// <summary>
-    /// Unique identifier for this engine instance.
+    /// Unique identifier for this microkernel instance.
     /// </summary>
     Guid EngineId { get; }
     
     /// <summary>
-    /// Version of the engine.
+    /// Version of the microkernel.
     /// </summary>
     string Version { get; }
     
     /// <summary>
-    /// Current state of the engine.
+    /// Current state of the microkernel.
     /// </summary>
     EngineState State { get; }
     
     /// <summary>
-    /// All registered modules in the engine.
+    /// All registered modules in the microkernel.
     /// </summary>
     IReadOnlyList<IEngineModule> Modules { get; }
     
     /// <summary>
-    /// Service provider for the engine.
+    /// Service provider for the microkernel.
     /// </summary>
     IServiceProvider ServiceProvider { get; }
+    
+    /// <summary>
+    /// Driver registry - core microkernel service.
+    /// </summary>
+    IDriverRegistry DriverRegistry { get; }
+    
+    /// <summary>
+    /// Communication bus - core microkernel IPC service.
+    /// </summary>
+    IDriverCommunicationBus CommunicationBus { get; }
+    
+    /// <summary>
+    /// Driver factory - core microkernel service.
+    /// </summary>
+    IDriverFactory DriverFactory { get; }
     
     /// <summary>
     /// Register a module with the engine.
@@ -200,9 +216,46 @@ public interface IBurbujaEngine
     Task<EngineHealth> GetHealthAsync(CancellationToken cancellationToken = default);
     
     /// <summary>
-    /// Get diagnostic information about the engine.
+    /// Get diagnostic information about the engine and all modules/drivers.
     /// </summary>
     Task<EngineDiagnostics> GetDiagnosticsAsync(CancellationToken cancellationToken = default);
+    
+    // Microkernel Driver Management
+    
+    /// <summary>
+    /// Register a driver with the microkernel.
+    /// </summary>
+    Task<DriverResult> RegisterDriverAsync(IEngineDriver driver);
+    
+    /// <summary>
+    /// Register a driver using a factory function.
+    /// </summary>
+    Task<DriverResult> RegisterDriverAsync<T>(Func<T> driverFactory) where T : class, IEngineDriver;
+    
+    /// <summary>
+    /// Register a driver with dependency injection.
+    /// </summary>
+    Task<DriverResult> RegisterDriverAsync<T>() where T : class, IEngineDriver;
+    
+    /// <summary>
+    /// Unregister a driver from the microkernel.
+    /// </summary>
+    Task<DriverResult> UnregisterDriverAsync(Guid driverId);
+    
+    /// <summary>
+    /// Get a driver by its ID.
+    /// </summary>
+    IEngineDriver? GetDriver(Guid driverId);
+    
+    /// <summary>
+    /// Get a driver by type.
+    /// </summary>
+    T? GetDriver<T>() where T : class, IEngineDriver;
+    
+    /// <summary>
+    /// Get all drivers of a specific type.
+    /// </summary>
+    IEnumerable<IEngineDriver> GetDriversByType(DriverType type);
     
     /// <summary>
     /// Event fired when engine state changes.
