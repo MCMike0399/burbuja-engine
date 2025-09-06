@@ -251,19 +251,19 @@ public class PriorityStressTest
                 var services = new ServiceCollection();
                 services.AddLogging(builder => builder.AddConsole().SetMinimumLevel(LogLevel.Information));
                 
-                services.AddBurbujaEngine(Guid.NewGuid(), config =>
+                services.AddBurbujaEngine(config =>
                 {
                     config.WithVersion("1.0.0-context-test")
                           .WithValue("ExecutionContext", context)
                           .WithModuleTimeout(TimeSpan.FromMinutes(1))
                           .EnableParallelInitialization(true);
                 })
-                .AddModule<MockConfigurationModule>()
-                .AddModule<MockSecurityModule>()
-                .AddModule<MockCacheModule>()
-                .AddModule<MockEmailServiceModule>()
-                .AddModule<MockAnalyticsModule>()
-                .AddModule<MockMonitoringModule>()
+                .AddEngineModule<MockConfigurationModule>()
+                .AddEngineModule<MockSecurityModule>()
+                .AddEngineModule<MockCacheModule>()
+                .AddEngineModule<MockEmailServiceModule>()
+                .AddEngineModule<MockAnalyticsModule>()
+                .AddEngineModule<MockMonitoringModule>()
                 .Build();
                 
                 var serviceProvider = services.BuildServiceProvider();
@@ -360,20 +360,20 @@ public class PriorityStressTest
         var services = new ServiceCollection();
         services.AddLogging(builder => builder.AddConsole().SetMinimumLevel(LogLevel.Warning));
         
-        services.AddBurbujaEngine(Guid.NewGuid(), config =>
+        services.AddBurbujaEngine(config =>
         {
             config.WithVersion("1.0.0-perf-test")
                   .EnableParallelInitialization(parallel);
         })
-        .AddModule(new MockCacheModule())
-        .AddModule(new MockEmailServiceModule())
-        .AddModule(new MockAnalyticsModule())
-        .AddModule(new MockCacheModule())
-        .AddModule(new MockEmailServiceModule())
-        .AddModule(new MockAnalyticsModule())
-        .AddModule(new MockCacheModule())
-        .AddModule(new MockEmailServiceModule())
-        .AddModule(new MockAnalyticsModule())
+        .AddEngineModule(new MockCacheModule())
+        .AddEngineModule(new MockEmailServiceModule())
+        .AddEngineModule(new MockAnalyticsModule())
+        .AddEngineModule(new MockCacheModule())
+        .AddEngineModule(new MockEmailServiceModule())
+        .AddEngineModule(new MockAnalyticsModule())
+        .AddEngineModule(new MockCacheModule())
+        .AddEngineModule(new MockEmailServiceModule())
+        .AddEngineModule(new MockAnalyticsModule())
         .Build();
         
         var serviceProvider = services.BuildServiceProvider();
@@ -452,15 +452,15 @@ public class PriorityStressTest
             var services = new ServiceCollection();
             services.AddLogging(builder => builder.AddConsole().SetMinimumLevel(LogLevel.Error));
             
-            services.AddBurbujaEngine(Guid.NewGuid(), config =>
+            services.AddBurbujaEngine(config =>
             {
                 config.WithVersion($"1.0.0-load-test-{engineIndex}")
                       .EnableParallelInitialization(true);
             })
-            .AddModule<MockConfigurationModule>()
-            .AddModule<MockCacheModule>()
-            .AddModule<MockBusinessLogicModule>()
-            .AddModule<MockEmailServiceModule>()
+            .AddEngineModule<MockConfigurationModule>()
+            .AddEngineModule<MockCacheModule>()
+            .AddEngineModule<MockBusinessLogicModule>()
+            .AddEngineModule<MockEmailServiceModule>()
             .Build();
             
             var serviceProvider = services.BuildServiceProvider();
@@ -550,7 +550,7 @@ public class PriorityStressTest
         var services = new ServiceCollection();
         services.AddLogging(builder => builder.AddConsole().SetMinimumLevel(LogLevel.Error));
         
-        var builder = services.AddBurbujaEngine(Guid.NewGuid(), config =>
+        var builder = services.AddBurbujaEngine(config =>
         {
             config.WithVersion("1.0.0-scalability-test")
                   .EnableParallelInitialization(true);
@@ -571,7 +571,7 @@ public class PriorityStressTest
         for (int i = 0; i < moduleCount; i++)
         {
             var moduleFactory = moduleFactories[i % moduleFactories.Length];
-            builder.AddModule(moduleFactory());
+            builder.AddEngineModule(moduleFactory());
         }
         
         builder.Build();
@@ -624,15 +624,15 @@ public class PriorityStressTest
                     var services = new ServiceCollection();
                     services.AddLogging(builder => builder.AddConsole().SetMinimumLevel(LogLevel.Error));
                     
-                    services.AddBurbujaEngine(Guid.NewGuid(), config =>
+                    services.AddBurbujaEngine(config =>
                     {
                         config.WithVersion($"1.0.0-memory-test-{i}")
                               .EnableParallelInitialization(true);
                     })
                     // Add memory-intensive modules
-                    .AddModule<MockCacheModule>()
-                    .AddModule<MockAnalyticsModule>()
-                    .AddModule<MockBusinessLogicModule>()
+                    .AddEngineModule<MockCacheModule>()
+                    .AddEngineModule<MockAnalyticsModule>()
+                    .AddEngineModule<MockBusinessLogicModule>()
                     .Build();
                     
                     var serviceProvider = services.BuildServiceProvider();

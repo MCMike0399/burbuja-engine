@@ -37,6 +37,13 @@ namespace BurbujaEngine.Engine.Modules;
 /// This exemplifies how the microkernel architecture enables building
 /// comprehensive monitoring solutions as independent, user-space services.
 /// </summary>
+[DiscoverableModule(
+    Name = "Monitor Module",
+    Version = "1.0.0",
+    Priority = 50,
+    Tags = new[] { "monitoring", "infrastructure", "observability", "diagnostics" },
+    Enabled = true
+)]
 public class MonitorModule : BaseEngineModule, IHostedService
 {
     private readonly ConcurrentDictionary<string, object> _metrics = new();

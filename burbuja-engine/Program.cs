@@ -1,6 +1,6 @@
 using BurbujaEngine.Configuration;
-using BurbujaEngine.Engine.Extensions;
 using BurbujaEngine.Engine.Core;
+using BurbujaEngine.Engine.Extensions;
 using BurbujaEngine.Monitor.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -19,9 +19,8 @@ builder.Services.AddSingleton<EnvironmentConfig>();
 // Add Monitor Blazor services
 builder.Services.AddMonitorBlazorServices();
 
-// Add BurbujaEngine with standardized module registration 
-// MICROKERNEL PRINCIPLE: Modules manage their own service registration
-builder.Services.AddBurbujaEngine(Guid.NewGuid())
+// MICROKERNEL APPROACH: Let the engine handle module discovery and lifecycle
+await builder.Services.AddBurbujaEngine()
     .WithConfiguration(config =>
     {
         config.WithVersion("1.0.0")
@@ -30,9 +29,17 @@ builder.Services.AddBurbujaEngine(Guid.NewGuid())
               .ContinueOnModuleFailure(true)  // Engine continues when modules fail
               .EnableParallelInitialization(true);
     })
-    .AddDatabaseModule()    // Module handles its own service registration
-    .AddMonitorModule()     // Module handles its own service registration
-    .BuildEngine();         // Build the engine with all configured modules
+    .WithModuleDiscovery(discovery =>
+    {
+        // Configure auto-discovery for the current environment
+        discovery.EnableConventionBasedDiscovery = true;
+        discovery.CurrentEnvironment = builder.Environment.EnvironmentName;
+        
+        // Filter assemblies to scan for modules
+        discovery.AssemblyFilter = name => 
+            name.Name?.Contains("BurbujaEngine", StringComparison.OrdinalIgnoreCase) == true;
+    })
+    .BuildEngineAsync(); // Use async build for auto-discovery
 
 var app = builder.Build();
 
@@ -69,25 +76,5 @@ app.MapEngineEndpoints("/engine");
 
 // Configure monitor dashboard and endpoints
 app.UseMonitorDashboard();
-
-// Basic info endpoint
-app.MapGet("/", (EnvironmentConfig config) =>
-{
-    var systemInfo = config.GetSystemInfo();
-    return Results.Ok(new
-    {
-        message = "BurbujaEngine API",
-        version = systemInfo["app_version"],
-        environment = systemInfo["environment"],
-        status = "running",
-        engine = new
-        {
-            health_endpoint = "/engine/health",
-            diagnostics_endpoint = "/engine/diagnostics",
-            status_endpoint = "/engine/status",
-            monitor_dashboard = "/monitor"
-        }
-    });
-});
 
 app.Run();

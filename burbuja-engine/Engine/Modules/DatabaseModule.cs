@@ -35,6 +35,13 @@ namespace BurbujaEngine.Engine.Modules;
 /// This exemplifies how the microkernel architecture enables building complex,
 /// enterprise-grade systems with clean separation of concerns.
 /// </summary>
+[DiscoverableModule(
+    Name = "Database Module",
+    Version = "1.0.0",
+    Priority = 1000,
+    Tags = new[] { "database", "infrastructure", "storage" },
+    Enabled = true
+)]
 public class DatabaseModule : BaseEngineModule
 {
     private IDatabaseConnection? _databaseConnection;

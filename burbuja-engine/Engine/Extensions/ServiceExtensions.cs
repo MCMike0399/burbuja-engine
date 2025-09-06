@@ -10,8 +10,8 @@ namespace BurbujaEngine.Engine.Extensions;
 public static class EngineServiceExtensions
 {
     /// <summary>
-    /// Add BurbujaEngine to the service collection without any modules.
-    /// Modules should be added explicitly using AddEngineModule<T>() methods.
+    /// Add BurbujaEngine with automatic module discovery.
+    /// This is the primary method developers should use - the microkernel handles everything else.
     /// </summary>
     public static EngineBuilder AddBurbujaEngine(
         this IServiceCollection services,
@@ -20,33 +20,22 @@ public static class EngineServiceExtensions
         if (services == null) throw new ArgumentNullException(nameof(services));
         
         var id = engineId ?? Guid.NewGuid();
-        var builder = new EngineBuilder(id, services);
-        
-        // Register hosted service for engine lifecycle management
-        services.AddHostedService<EngineHostedService>();
-        
-        return builder;
+        return new EngineBuilder(id, services);
     }
-    
+
     /// <summary>
-    /// Add BurbujaEngine with configuration but no modules.
-    /// This method sets up the engine configuration while keeping module registration explicit.
+    /// Add BurbujaEngine with configuration and automatic module discovery.
     /// </summary>
     public static EngineBuilder AddBurbujaEngine(
         this IServiceCollection services,
-        Guid engineId,
-        Action<EngineConfigurationBuilder> configureEngine)
+        Action<EngineConfigurationBuilder> configure,
+        Guid? engineId = null)
     {
         if (services == null) throw new ArgumentNullException(nameof(services));
-        if (configureEngine == null) throw new ArgumentNullException(nameof(configureEngine));
+        if (configure == null) throw new ArgumentNullException(nameof(configure));
         
-        var builder = new EngineBuilder(engineId, services)
-            .WithConfiguration(configureEngine);
-        
-        // Register hosted service for engine lifecycle management
-        services.AddHostedService<EngineHostedService>();
-        
-        return builder;
+        var id = engineId ?? Guid.NewGuid();
+        return new EngineBuilder(id, services).WithConfiguration(configure);
     }
     
     /// <summary>
@@ -58,32 +47,23 @@ public static class EngineServiceExtensions
     {
         if (builder == null) throw new ArgumentNullException(nameof(builder));
         
-        return builder.AddModule<TModule>();
-    }
-    
-    /// <summary>
-    /// Add a specific engine module with a factory to the engine builder.
-    /// Useful for modules that require custom initialization logic.
-    /// </summary>
-    public static EngineBuilder AddEngineModule<TModule>(this EngineBuilder builder, Func<IServiceProvider, TModule> factory)
-        where TModule : class, IEngineModule
-    {
-        if (builder == null) throw new ArgumentNullException(nameof(builder));
-        if (factory == null) throw new ArgumentNullException(nameof(factory));
-        
-        return builder.AddModule(factory);
+        return builder.IncludeModule<TModule>();
     }
     
     /// <summary>
     /// Add a specific engine module instance to the engine builder.
     /// Use this when you need to configure the module before registration.
     /// </summary>
-    public static EngineBuilder AddEngineModule(this EngineBuilder builder, IEngineModule module)
+    public static EngineBuilder AddEngineModule<TModule>(this EngineBuilder builder, TModule module)
+        where TModule : class, IEngineModule
     {
         if (builder == null) throw new ArgumentNullException(nameof(builder));
         if (module == null) throw new ArgumentNullException(nameof(module));
         
-        return builder.AddModule(module);
+        // Register the specific instance
+        builder.Services.AddSingleton<TModule>(module);
+        builder.Services.AddSingleton<IEngineModule>(module);
+        return builder.IncludeModule<TModule>();
     }
     
     /// <summary>
@@ -95,6 +75,17 @@ public static class EngineServiceExtensions
         if (builder == null) throw new ArgumentNullException(nameof(builder));
         
         return builder.Build();
+    }
+
+    /// <summary>
+    /// Build and register the engine with all configured modules (async version).
+    /// Call this after configuring all modules and engine settings.
+    /// </summary>
+    public static async Task<IServiceCollection> BuildEngineAsync(this EngineBuilder builder)
+    {
+        if (builder == null) throw new ArgumentNullException(nameof(builder));
+        
+        return await builder.BuildAsync();
     }
 }
 
