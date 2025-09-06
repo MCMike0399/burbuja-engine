@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 using BurbujaEngine.Engine.Core;
 using BurbujaEngine.Engine.Extensions;
+using BurbujaEngine.Testing.SystemTest;
 
 namespace BurbujaEngine.Testing.StressTest;
 
@@ -15,10 +16,12 @@ public class PriorityStressTest
 {
     private readonly ILogger<PriorityStressTest> _logger;
     private readonly List<TestResult> _results = new();
+    private readonly SystemMetricsCollector _metricsCollector;
     
     public PriorityStressTest(ILogger<PriorityStressTest> logger)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _metricsCollector = new SystemMetricsCollector();
     }
     
     /// <summary>
@@ -34,6 +37,11 @@ public class PriorityStressTest
             StartTime = DateTime.UtcNow,
             TestResults = new List<TestResult>()
         };
+        
+        // Collect initial system metrics
+        var initialMetrics = await _metricsCollector.CollectMetricsAsync();
+        report.InitialSystemMetrics = initialMetrics;
+        _logger.LogInformation("Initial system state: {Metrics}", initialMetrics.ToString());
         
         try
         {
@@ -62,11 +70,24 @@ public class PriorityStressTest
             var test5 = await TestPriorityScalability(cancellationToken);
             report.TestResults.Add(test5);
             
+            // Test 6: Memory Pressure Test
+            _logger.LogInformation("Test 6: Memory Pressure Test");
+            var test6 = await TestMemoryPressure(cancellationToken);
+            report.TestResults.Add(test6);
+            
             overallStopwatch.Stop();
+            
+            // Collect final system metrics
+            var finalMetrics = await _metricsCollector.CollectMetricsAsync();
+            report.FinalSystemMetrics = finalMetrics;
+            report.SystemMetricsDelta = _metricsCollector.CalculateDelta(initialMetrics, finalMetrics);
+            
             report.EndTime = DateTime.UtcNow;
             report.TotalDuration = overallStopwatch.Elapsed;
             report.IsSuccessful = report.TestResults.All(r => r.IsSuccessful);
             
+            _logger.LogInformation("Final system state: {Metrics}", finalMetrics.ToString());
+            _logger.LogInformation("System changes: {Delta}", report.SystemMetricsDelta.ToString());
             _logger.LogInformation("Stress test completed in {Duration:F2}ms. Success: {Success}", 
                 overallStopwatch.Elapsed.TotalMilliseconds, report.IsSuccessful);
             
@@ -75,6 +96,19 @@ public class PriorityStressTest
         catch (Exception ex)
         {
             _logger.LogError(ex, "Stress test failed: {Message}", ex.Message);
+            
+            // Still collect final metrics even on failure
+            try
+            {
+                var finalMetrics = await _metricsCollector.CollectMetricsAsync();
+                report.FinalSystemMetrics = finalMetrics;
+                report.SystemMetricsDelta = _metricsCollector.CalculateDelta(initialMetrics, finalMetrics);
+            }
+            catch
+            {
+                // Ignore metrics collection errors during cleanup
+            }
+            
             report.EndTime = DateTime.UtcNow;
             report.TotalDuration = overallStopwatch.Elapsed;
             report.IsSuccessful = false;
@@ -94,6 +128,8 @@ public class PriorityStressTest
             TestName = "Basic Priority Ordering",
             StartTime = DateTime.UtcNow
         };
+        
+        var beforeMetrics = await _metricsCollector.CollectMetricsAsync();
         
         try
         {
@@ -164,6 +200,10 @@ public class PriorityStressTest
             await engine.ShutdownAsync(cancellationToken);
             
             stopwatch.Stop();
+            
+            var afterMetrics = await _metricsCollector.CollectMetricsAsync();
+            result.SystemMetrics = _metricsCollector.CalculateDelta(beforeMetrics, afterMetrics);
+            
             result.EndTime = DateTime.UtcNow;
             result.Duration = stopwatch.Elapsed;
             result.IsSuccessful = true;
@@ -174,6 +214,10 @@ public class PriorityStressTest
         catch (Exception ex)
         {
             stopwatch.Stop();
+            
+            var afterMetrics = await _metricsCollector.CollectMetricsAsync();
+            result.SystemMetrics = _metricsCollector.CalculateDelta(beforeMetrics, afterMetrics);
+            
             result.EndTime = DateTime.UtcNow;
             result.Duration = stopwatch.Elapsed;
             result.IsSuccessful = false;
@@ -559,6 +603,169 @@ public class PriorityStressTest
         
         return stopwatch.Elapsed;
     }
+    
+    /// <summary>
+    /// Test memory pressure and garbage collection behavior.
+    /// </summary>
+    private async Task<TestResult> TestMemoryPressure(CancellationToken cancellationToken)
+    {
+        var result = new TestResult
+        {
+            TestName = "Memory Pressure Test",
+            StartTime = DateTime.UtcNow
+        };
+        
+        var stopwatch = Stopwatch.StartNew();
+        var beforeMetrics = await _metricsCollector.CollectMetricsAsync();
+        
+        try
+        {
+            const int engineCount = 3;
+            const int allocationsPerEngine = 1000;
+            var engines = new List<IBurbujaEngine>();
+            var allocatedMemory = new List<object>();
+            
+            try
+            {
+                // Create multiple engines and allocate memory
+                for (int i = 0; i < engineCount; i++)
+                {
+                    var services = new ServiceCollection();
+                    services.AddLogging(builder => builder.AddConsole().SetMinimumLevel(LogLevel.Error));
+                    
+                    services.AddBurbujaEngine(Guid.NewGuid(), engine =>
+                    {
+                        engine.WithConfiguration(config =>
+                        {
+                            config.WithVersion($"1.0.0-memory-test-{i}")
+                                  .EnableParallelInitialization(true);
+                        });
+                        
+                        // Add memory-intensive modules
+                        engine.AddModule<MockCacheModule>();
+                        engine.AddModule<MockAnalyticsModule>();
+                        engine.AddModule<MockBusinessLogicModule>();
+                    });
+                    
+                    var serviceProvider = services.BuildServiceProvider();
+                    var engineInstance = serviceProvider.GetRequiredService<IBurbujaEngine>();
+                    
+                    var initResult = await engineInstance.InitializeAsync(cancellationToken);
+                    var startResult = await engineInstance.StartAsync(cancellationToken);
+                    
+                    if (!initResult.Success || !startResult.Success)
+                    {
+                        throw new Exception($"Engine {i} failed to start");
+                    }
+                    
+                    engines.Add(engineInstance);
+                    
+                    // Allocate memory to create pressure
+                    for (int j = 0; j < allocationsPerEngine; j++)
+                    {
+                        // Create various sized allocations
+                        var size = (j % 10 + 1) * 1024; // 1KB to 10KB
+                        var allocation = new byte[size];
+                        Random.Shared.NextBytes(allocation); // Fill with data
+                        allocatedMemory.Add(allocation);
+                        
+                        if (j % 100 == 0)
+                        {
+                            cancellationToken.ThrowIfCancellationRequested();
+                        }
+                    }
+                }
+                
+                // Force garbage collection to test system behavior under pressure
+                var gcBefore = GC.GetTotalMemory(false);
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+                GC.Collect();
+                var gcAfter = GC.GetTotalMemory(false);
+                
+                result.Metrics["EngineCount"] = engineCount;
+                result.Metrics["AllocationsPerEngine"] = allocationsPerEngine;
+                result.Metrics["TotalAllocations"] = engineCount * allocationsPerEngine;
+                result.Metrics["MemoryBeforeGC_MB"] = gcBefore / (1024.0 * 1024.0);
+                result.Metrics["MemoryAfterGC_MB"] = gcAfter / (1024.0 * 1024.0);
+                result.Metrics["MemoryFreed_MB"] = (gcBefore - gcAfter) / (1024.0 * 1024.0);
+                
+                // Test that engines are still responsive after memory pressure
+                var responsiveCount = 0;
+                foreach (var engine in engines)
+                {
+                    try
+                    {
+                        var health = await engine.GetHealthAsync(cancellationToken);
+                        if (health.Status == HealthStatus.Healthy)
+                        {
+                            responsiveCount++;
+                        }
+                    }
+                    catch
+                    {
+                        // Engine may not respond under pressure
+                    }
+                }
+                
+                result.Metrics["ResponsiveEngineCount"] = responsiveCount;
+                result.Metrics["ResponsivePercentage"] = (double)responsiveCount / engineCount * 100;
+                
+                result.IsSuccessful = responsiveCount >= engineCount * 0.8; // At least 80% should remain responsive
+                result.Message = result.IsSuccessful 
+                    ? $"Memory pressure test passed - {responsiveCount}/{engineCount} engines remained responsive"
+                    : $"Memory pressure test failed - only {responsiveCount}/{engineCount} engines remained responsive";
+            }
+            finally
+            {
+                // Cleanup
+                foreach (var engine in engines)
+                {
+                    try
+                    {
+                        await engine.ShutdownAsync(CancellationToken.None);
+                    }
+                    catch
+                    {
+                        // Ignore shutdown errors during cleanup
+                    }
+                }
+                
+                // Clear allocated memory
+                allocatedMemory.Clear();
+                
+                // Force final garbage collection
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+                GC.Collect();
+            }
+            
+            stopwatch.Stop();
+            
+            var afterMetrics = await _metricsCollector.CollectMetricsAsync();
+            result.SystemMetrics = _metricsCollector.CalculateDelta(beforeMetrics, afterMetrics);
+            
+            result.EndTime = DateTime.UtcNow;
+            result.Duration = stopwatch.Elapsed;
+            
+            return result;
+        }
+        catch (Exception ex)
+        {
+            stopwatch.Stop();
+            
+            var afterMetrics = await _metricsCollector.CollectMetricsAsync();
+            result.SystemMetrics = _metricsCollector.CalculateDelta(beforeMetrics, afterMetrics);
+            
+            result.EndTime = DateTime.UtcNow;
+            result.Duration = stopwatch.Elapsed;
+            result.IsSuccessful = false;
+            result.ErrorMessage = ex.Message;
+            result.Message = $"Memory pressure test failed: {ex.Message}";
+            
+            return result;
+        }
+    }
 }
 
 /// <summary>
@@ -574,6 +781,7 @@ public class TestResult
     public string Message { get; set; } = string.Empty;
     public string? ErrorMessage { get; set; }
     public Dictionary<string, object> Metrics { get; set; } = new();
+    public SystemMetrics? SystemMetrics { get; set; }
 }
 
 /// <summary>
@@ -587,6 +795,9 @@ public class StressTestReport
     public bool IsSuccessful { get; set; }
     public string? ErrorMessage { get; set; }
     public List<TestResult> TestResults { get; set; } = new();
+    public SystemMetrics? InitialSystemMetrics { get; set; }
+    public SystemMetrics? FinalSystemMetrics { get; set; }
+    public SystemMetrics? SystemMetricsDelta { get; set; }
     
     public void PrintReport()
     {
@@ -601,6 +812,21 @@ public class StressTestReport
         if (!string.IsNullOrEmpty(ErrorMessage))
         {
             Console.WriteLine($"Error: {ErrorMessage}");
+        }
+        
+        // System metrics summary
+        if (SystemMetricsDelta != null)
+        {
+            Console.WriteLine();
+            Console.WriteLine("SYSTEM METRICS DELTA:");
+            Console.WriteLine("-".PadRight(40, '-'));
+            Console.WriteLine($"CPU Usage Change: {SystemMetricsDelta.CpuUsagePercent:F2}%");
+            Console.WriteLine($"Memory Change: {SystemMetricsDelta.MemoryUsageMB:F2} MB");
+            Console.WriteLine($"Threads Change: {SystemMetricsDelta.ThreadCount}");
+            Console.WriteLine($"GC Collections: {SystemMetricsDelta.GcCollectionCount}");
+            Console.WriteLine($"Handles Change: {SystemMetricsDelta.HandleCount}");
+            Console.WriteLine($"Managed Memory Change: {SystemMetricsDelta.ManagedMemoryMB:F2} MB");
+            Console.WriteLine($"Allocated Bytes: {SystemMetricsDelta.AllocatedBytesForCurrentThread:N0}");
         }
         
         Console.WriteLine();
@@ -626,6 +852,11 @@ public class StressTestReport
                 {
                     Console.WriteLine($"    {metric.Key}: {metric.Value}");
                 }
+            }
+            
+            if (test.SystemMetrics != null)
+            {
+                Console.WriteLine($"  System Impact: {test.SystemMetrics}");
             }
             
             Console.WriteLine();

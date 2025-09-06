@@ -604,7 +604,7 @@ public class BurbujaEngine : IBurbujaEngine, IDisposable
         var context = GetExecutionContext();
         
         // Sort by priority first using the new priority comparer, then resolve dependencies
-        var comparer = new ModulePriorityComparer(context);
+                    var comparer = new ModulePriorityComparer(context);
         var modulesByPriority = _modules.OrderBy(m => m, comparer);
         
         _logger.LogDebug("[{EngineId}] Module priority order (context: {Context}): {ModuleOrder}", 
@@ -648,11 +648,11 @@ public class BurbujaEngine : IBurbujaEngine, IDisposable
     
     private string GetModulePriorityInfo(IEngineModule module, string? context)
     {
-        if (module is IAdvancedPriorityModule advancedModule)
+        if (module is IModulePriorityModule priorityModule)
         {
-            var config = advancedModule.PriorityConfig;
-            var effectivePriority = config.GetEffectivePriority(context);
-            return $"{config.BasePriority}({effectivePriority})";
+            var priority = priorityModule.ModulePriority;
+            var effectivePriority = priority.GetEffectivePriority(context);
+            return $"{priority.Level}({effectivePriority})";
         }
         
         return module.Priority.ToString();

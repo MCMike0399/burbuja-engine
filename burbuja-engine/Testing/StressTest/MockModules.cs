@@ -16,631 +16,496 @@ public class MockConfigurationModule : BaseEngineModule
     public override string ModuleName => "Mock Configuration Module";
     public override string Version => "1.0.0";
     
-    protected override ModulePriorityConfig ConfigurePriority()
+    protected override ModulePriority ConfigurePriority()
     {
-        return CreateAdvancedPriorityConfig(
-            priority: ModulePriority.Critical,
-            subPriority: 5,
-            canParallelInitialize: false,
-            tags: new() { "configuration", "critical", "foundation" }
-        );
+        return ModulePriority.Create(PriorityLevel.Critical)
+            .WithSubPriority(5)
+            .CanParallelInitialize(false)
+            .WithTags("configuration", "critical", "foundation")
+            .Build();
     }
     
     protected override async Task OnInitializeAsync(CancellationToken cancellationToken)
     {
         LogInfo("Starting configuration loading simulation...");
         
-        // Simulate configuration loading with computation
-        var stopwatch = Stopwatch.StartNew();
-        await SimulateConfigurationLoading(cancellationToken);
-        stopwatch.Stop();
+        // Simulate configuration file reading
+        await Task.Delay(Random.Shared.Next(100, 500), cancellationToken);
         
-        LogInfo($"Configuration loaded in {stopwatch.ElapsedMilliseconds}ms");
+        // Simulate configuration validation
+        for (int i = 0; i < 10; i++)
+        {
+            LogDebug($"Validating configuration section {i + 1}/10");
+            await Task.Delay(Random.Shared.Next(10, 50), cancellationToken);
+        }
+        
+        LogInfo("Configuration loaded and validated successfully");
     }
     
-    private async Task SimulateConfigurationLoading(CancellationToken cancellationToken)
+    protected override async Task OnStartAsync(CancellationToken cancellationToken)
     {
-        // Simulate heavy configuration parsing
-        for (int i = 0; i < 1000; i++)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            
-            // Simulate parsing JSON/XML configuration
-            var config = $"{{\"key{i}\": \"value{i}\", \"setting{i}\": {i * 2}}}";
-            var bytes = Encoding.UTF8.GetBytes(config);
-            using var hash = SHA256.Create();
-            var hashBytes = hash.ComputeHash(bytes);
-            
-            if (i % 100 == 0)
-            {
-                await Task.Delay(1, cancellationToken); // Yield occasionally
-            }
-        }
+        LogInfo("Configuration module is ready for use");
+        await Task.CompletedTask;
+    }
+    
+    protected override async Task OnStopAsync(CancellationToken cancellationToken)
+    {
+        LogInfo("Stopping configuration module");
+        await Task.Delay(50, cancellationToken);
     }
 }
 
 /// <summary>
 /// Mock security module - critical priority.
-/// Simulates security initialization and key generation.
+/// Simulates security initialization and cryptographic setup.
 /// </summary>
 public class MockSecurityModule : BaseEngineModule
 {
     public override string ModuleName => "Mock Security Module";
-    public override string Version => "1.0.0";
+    public override string Version => "1.2.0";
     
-    protected override ModulePriorityConfig ConfigurePriority()
+    protected override ModulePriority ConfigurePriority()
     {
-        return CreateAdvancedPriorityConfig(
-            priority: ModulePriority.Critical,
-            subPriority: 10,
-            canParallelInitialize: false,
-            tags: new() { "security", "cryptography", "critical" }
-        );
+        return ModulePriority.Create(PriorityLevel.Critical)
+            .WithSubPriority(10)
+            .CanParallelInitialize(false)
+            .WithTags("security", "critical", "foundation")
+            .Build();
     }
     
     protected override async Task OnInitializeAsync(CancellationToken cancellationToken)
     {
-        LogInfo("Starting security initialization simulation...");
+        LogInfo("Initializing security subsystem...");
         
-        var stopwatch = Stopwatch.StartNew();
-        await SimulateSecurityInitialization(cancellationToken);
-        stopwatch.Stop();
+        // Simulate certificate loading
+        await Task.Delay(Random.Shared.Next(200, 800), cancellationToken);
+        LogInfo("Certificates loaded");
         
-        LogInfo($"Security initialized in {stopwatch.ElapsedMilliseconds}ms");
+        // Simulate cryptographic provider setup
+        using var rsa = RSA.Create();
+        for (int i = 0; i < 5; i++)
+        {
+            var data = Encoding.UTF8.GetBytes($"test-security-{i}");
+            var signature = rsa.SignData(data, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+            var isValid = rsa.VerifyData(data, signature, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+            
+            LogDebug($"Security test {i + 1}/5: {(isValid ? "PASS" : "FAIL")}");
+            await Task.Delay(Random.Shared.Next(50, 150), cancellationToken);
+        }
+        
+        LogInfo("Security subsystem initialized successfully");
     }
     
-    private async Task SimulateSecurityInitialization(CancellationToken cancellationToken)
+    protected override async Task OnStartAsync(CancellationToken cancellationToken)
     {
-        // Simulate key generation and security setup
-        using var rsa = RSA.Create(2048);
-        
-        for (int i = 0; i < 100; i++)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            
-            // Simulate key operations
-            var data = Encoding.UTF8.GetBytes($"Security test data {i}");
-            var encrypted = rsa.Encrypt(data, RSAEncryptionPadding.OaepSHA256);
-            var decrypted = rsa.Decrypt(encrypted, RSAEncryptionPadding.OaepSHA256);
-            
-            if (i % 10 == 0)
-            {
-                await Task.Delay(1, cancellationToken);
-            }
-        }
+        LogInfo("Security module active and monitoring");
+        await Task.CompletedTask;
+    }
+    
+    protected override async Task OnStopAsync(CancellationToken cancellationToken)
+    {
+        LogInfo("Stopping security module");
+        await Task.Delay(100, cancellationToken);
     }
 }
 
 /// <summary>
 /// Mock cache module - infrastructure priority.
-/// Simulates cache initialization and data loading.
+/// Simulates cache initialization and connection setup.
 /// </summary>
 public class MockCacheModule : BaseEngineModule
 {
-    public override string ModuleName => "Mock Cache Module";
-    public override string Version => "1.0.0";
+    private readonly Dictionary<string, object> _cache = new();
     
-    protected override ModulePriorityConfig ConfigurePriority()
+    public override string ModuleName => "Mock Cache Module";
+    public override string Version => "2.1.0";
+    
+    protected override ModulePriority ConfigurePriority()
     {
-        return CreateAdvancedPriorityConfig(
-            priority: ModulePriority.Infrastructure,
-            subPriority: 20,
-            canParallelInitialize: true, // Can initialize with other infrastructure
-            contextAdjustments: new()
-            {
-                ["Development"] = 10, // Lower priority in development
-                ["Testing"] = 5
-            },
-            tags: new() { "cache", "infrastructure", "performance" }
-        );
+        return ModulePriority.Create(PriorityLevel.Infrastructure)
+            .WithSubPriority(15)
+            .CanParallelInitialize(true)
+            .WithTags("cache", "infrastructure", "performance")
+            .WithContextAdjustment("Production", -5) // Higher priority in production
+            .Build();
     }
     
     protected override async Task OnInitializeAsync(CancellationToken cancellationToken)
     {
-        LogInfo("Starting cache initialization simulation...");
+        LogInfo("Initializing cache module...");
         
-        var stopwatch = Stopwatch.StartNew();
-        await SimulateCacheInitialization(cancellationToken);
-        stopwatch.Stop();
+        // Simulate cache server connection
+        await Task.Delay(Random.Shared.Next(300, 700), cancellationToken);
+        LogInfo("Cache server connected");
         
-        LogInfo($"Cache initialized in {stopwatch.ElapsedMilliseconds}ms");
+        // Simulate cache warming
+        for (int i = 0; i < 20; i++)
+        {
+            var key = $"cache-key-{i}";
+            var value = $"cached-value-{Random.Shared.Next(1000, 9999)}";
+            _cache[key] = value;
+            
+            LogDebug($"Cache warming: {key} = {value}");
+            await Task.Delay(Random.Shared.Next(10, 50), cancellationToken);
+        }
+        
+        LogInfo($"Cache module initialized with {_cache.Count} entries");
     }
     
-    private async Task SimulateCacheInitialization(CancellationToken cancellationToken)
+    protected override async Task OnStartAsync(CancellationToken cancellationToken)
     {
-        var cache = new Dictionary<string, object>();
+        LogInfo("Cache module ready for operations");
         
-        // Simulate populating cache with computed values
-        var tasks = new List<Task>();
-        for (int batch = 0; batch < 4; batch++)
+        // Simulate background cache maintenance
+        _ = Task.Run(async () =>
         {
-            tasks.Add(Task.Run(async () =>
+            while (!cancellationToken.IsCancellationRequested)
             {
-                for (int i = batch * 250; i < (batch + 1) * 250; i++)
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    
-                    // Simulate expensive cache value computation
-                    var value = ComputeExpensiveCacheValue(i);
-                    lock (cache)
-                    {
-                        cache[$"key_{i}"] = value;
-                    }
-                    
-                    if (i % 50 == 0)
-                    {
-                        await Task.Delay(1, cancellationToken);
-                    }
-                }
-            }, cancellationToken));
-        }
+                await Task.Delay(TimeSpan.FromSeconds(30), cancellationToken);
+                LogDebug($"Cache maintenance: {_cache.Count} entries in cache");
+            }
+        }, cancellationToken);
         
-        await Task.WhenAll(tasks);
+        await Task.CompletedTask;
     }
     
-    private object ComputeExpensiveCacheValue(int seed)
+    protected override async Task OnStopAsync(CancellationToken cancellationToken)
     {
-        // Simulate expensive computation
-        var result = 0;
-        for (int i = 0; i < 10000; i++)
-        {
-            result += (seed * i) % 1000;
-        }
-        return new { Seed = seed, Result = result, Timestamp = DateTime.UtcNow };
+        LogInfo("Stopping cache module");
+        
+        // Simulate cache flush
+        var entryCount = _cache.Count;
+        _cache.Clear();
+        LogInfo($"Cache flushed: {entryCount} entries cleared");
+        
+        await Task.Delay(100, cancellationToken);
     }
 }
 
 /// <summary>
 /// Mock business logic module - core priority.
-/// Simulates business rule processing and validation.
+/// Simulates core business operations and rules processing.
 /// </summary>
 public class MockBusinessLogicModule : BaseEngineModule
 {
-    public override string ModuleName => "Mock Business Logic Module";
-    public override string Version => "1.0.0";
+    private readonly List<string> _businessRules = new();
     
-    protected override ModulePriorityConfig ConfigurePriority()
+    public override string ModuleName => "Mock Business Logic Module";
+    public override string Version => "3.0.1";
+    
+    protected override ModulePriority ConfigurePriority()
     {
-        return CreateAdvancedPriorityConfig(
-            priority: ModulePriority.Core,
-            subPriority: 15,
-            canParallelInitialize: true,
-            tags: new() { "business", "core", "rules" }
-        );
+        return ModulePriority.Create(PriorityLevel.Core)
+            .WithSubPriority(20)
+            .CanParallelInitialize(true)
+            .WithTags("business", "core", "logic")
+            .ForCoreLogic()
+            .Build();
     }
     
     protected override async Task OnInitializeAsync(CancellationToken cancellationToken)
     {
-        LogInfo("Starting business logic initialization simulation...");
+        LogInfo("Loading business rules...");
         
-        var stopwatch = Stopwatch.StartNew();
-        await SimulateBusinessLogicInitialization(cancellationToken);
-        stopwatch.Stop();
-        
-        LogInfo($"Business logic initialized in {stopwatch.ElapsedMilliseconds}ms");
-    }
-    
-    private async Task SimulateBusinessLogicInitialization(CancellationToken cancellationToken)
-    {
-        // Simulate loading and compiling business rules
-        var rules = new List<BusinessRule>();
-        
-        for (int i = 0; i < 500; i++)
+        // Simulate business rules loading
+        var ruleNames = new[]
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            "ValidationRule", "AuthorizationRule", "BusinessProcessRule",
+            "DataIntegrityRule", "WorkflowRule", "ComplianceRule",
+            "SecurityRule", "AuditRule", "PerformanceRule", "IntegrationRule"
+        };
+        
+        foreach (var ruleName in ruleNames)
+        {
+            LogDebug($"Loading {ruleName}...");
+            _businessRules.Add(ruleName);
             
-            // Simulate complex business rule evaluation
-            var rule = new BusinessRule
-            {
-                Id = i,
-                Name = $"Rule_{i}",
-                Logic = GenerateComplexLogic(i),
-                IsValid = ValidateRule(i)
-            };
+            // Simulate rule compilation/validation
+            await Task.Delay(Random.Shared.Next(50, 200), cancellationToken);
             
-            rules.Add(rule);
-            
-            if (i % 50 == 0)
-            {
-                await Task.Delay(1, cancellationToken);
-            }
+            LogDebug($"{ruleName} loaded and validated");
         }
         
-        // Simulate rule compilation
-        await Task.Run(() =>
+        LogInfo($"Business logic module initialized with {_businessRules.Count} rules");
+    }
+    
+    protected override async Task OnStartAsync(CancellationToken cancellationToken)
+    {
+        LogInfo("Business logic module ready for processing");
+        
+        // Simulate business operations
+        _ = Task.Run(async () =>
         {
-            foreach (var rule in rules)
+            int operationCount = 0;
+            while (!cancellationToken.IsCancellationRequested)
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                rule.CompiledLogic = CompileRule(rule.Logic);
+                await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
+                operationCount++;
+                LogDebug($"Processed business operation #{operationCount}");
+                
+                if (operationCount % 10 == 0)
+                {
+                    LogInfo($"Completed {operationCount} business operations");
+                }
             }
         }, cancellationToken);
+        
+        await Task.CompletedTask;
     }
     
-    private string GenerateComplexLogic(int seed)
+    protected override async Task OnStopAsync(CancellationToken cancellationToken)
     {
-        var sb = new StringBuilder();
-        for (int i = 0; i < 100; i++)
-        {
-            sb.Append($"if (value_{i} > {seed + i}) {{ result += {i}; }} ");
-        }
-        return sb.ToString();
-    }
-    
-    private bool ValidateRule(int seed)
-    {
-        // Simulate rule validation with computation
-        var hash = 0;
-        for (int i = 0; i < 1000; i++)
-        {
-            hash = hash * 31 + (seed + i);
-        }
-        return hash % 2 == 0;
-    }
-    
-    private object CompileRule(string logic)
-    {
-        // Simulate rule compilation
-        using var hash = SHA256.Create();
-        var bytes = Encoding.UTF8.GetBytes(logic);
-        var hashBytes = hash.ComputeHash(bytes);
-        return Convert.ToBase64String(hashBytes);
-    }
-    
-    private class BusinessRule
-    {
-        public int Id { get; set; }
-        public string Name { get; set; } = string.Empty;
-        public string Logic { get; set; } = string.Empty;
-        public bool IsValid { get; set; }
-        public object? CompiledLogic { get; set; }
+        LogInfo("Stopping business logic module");
+        LogInfo($"Business rules count: {_businessRules.Count}");
+        await Task.Delay(150, cancellationToken);
     }
 }
 
 /// <summary>
 /// Mock email service module - service priority.
-/// Simulates email service initialization.
+/// Simulates email service initialization and message processing.
 /// </summary>
 public class MockEmailServiceModule : BaseEngineModule
 {
-    public override string ModuleName => "Mock Email Service Module";
-    public override string Version => "1.0.0";
+    private int _emailsSent = 0;
     
-    protected override ModulePriorityConfig ConfigurePriority()
+    public override string ModuleName => "Mock Email Service Module";
+    public override string Version => "1.5.2";
+    
+    protected override ModulePriority ConfigurePriority()
     {
-        return CreateAdvancedPriorityConfig(
-            priority: ModulePriority.Service,
-            subPriority: 25,
-            canParallelInitialize: true,
-            contextAdjustments: new()
-            {
-                ["Development"] = 20, // Much lower priority in development
-                ["Testing"] = 30
-            },
-            tags: new() { "email", "service", "communication" }
-        );
+        return ModulePriority.Create(PriorityLevel.Service)
+            .WithSubPriority(25)
+            .CanParallelInitialize(true)
+            .WithTags("email", "service", "communication")
+            .ForService()
+            .Build();
     }
     
     protected override async Task OnInitializeAsync(CancellationToken cancellationToken)
     {
-        LogInfo("Starting email service initialization simulation...");
+        LogInfo("Initializing email service...");
         
-        var stopwatch = Stopwatch.StartNew();
-        await SimulateEmailServiceInitialization(cancellationToken);
-        stopwatch.Stop();
+        // Simulate SMTP server connection
+        await Task.Delay(Random.Shared.Next(200, 600), cancellationToken);
+        LogInfo("SMTP server connected");
         
-        LogInfo($"Email service initialized in {stopwatch.ElapsedMilliseconds}ms");
+        // Simulate template loading
+        var templates = new[] { "Welcome", "Confirmation", "Reset", "Notification", "Report" };
+        foreach (var template in templates)
+        {
+            LogDebug($"Loading email template: {template}");
+            await Task.Delay(Random.Shared.Next(30, 100), cancellationToken);
+        }
+        
+        LogInfo($"Email service initialized with {templates.Length} templates");
     }
     
-    private async Task SimulateEmailServiceInitialization(CancellationToken cancellationToken)
+    protected override async Task OnStartAsync(CancellationToken cancellationToken)
     {
-        // Simulate template loading and compilation
-        var templates = new List<EmailTemplate>();
+        LogInfo("Email service ready for sending");
         
-        for (int i = 0; i < 200; i++)
+        // Simulate periodic email processing
+        _ = Task.Run(async () =>
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            
-            var template = new EmailTemplate
+            while (!cancellationToken.IsCancellationRequested)
             {
-                Id = i,
-                Name = $"Template_{i}",
-                Subject = $"Subject for template {i}",
-                Body = GenerateEmailBody(i),
-                IsCompiled = false
-            };
-            
-            // Simulate template compilation
-            template.CompiledBody = await CompileEmailTemplate(template.Body, cancellationToken);
-            template.IsCompiled = true;
-            
-            templates.Add(template);
-            
-            if (i % 20 == 0)
-            {
-                await Task.Delay(1, cancellationToken);
+                await Task.Delay(TimeSpan.FromSeconds(8), cancellationToken);
+                
+                // Simulate sending emails
+                var emailsToSend = Random.Shared.Next(1, 5);
+                for (int i = 0; i < emailsToSend; i++)
+                {
+                    _emailsSent++;
+                    LogDebug($"Sent email #{_emailsSent}");
+                    await Task.Delay(Random.Shared.Next(100, 300), cancellationToken);
+                }
+                
+                if (_emailsSent % 10 == 0)
+                {
+                    LogInfo($"Total emails sent: {_emailsSent}");
+                }
             }
-        }
+        }, cancellationToken);
+        
+        await Task.CompletedTask;
     }
     
-    private string GenerateEmailBody(int seed)
+    protected override async Task OnStopAsync(CancellationToken cancellationToken)
     {
-        var random = new Random(seed);
-        var sb = new StringBuilder();
-        
-        for (int i = 0; i < 50; i++)
-        {
-            sb.AppendLine($"Line {i}: Lorem ipsum dolor sit amet {random.Next(1000)}");
-        }
-        
-        return sb.ToString();
-    }
-    
-    private async Task<string> CompileEmailTemplate(string body, CancellationToken cancellationToken)
-    {
-        // Simulate template compilation
-        await Task.Delay(Random.Shared.Next(1, 5), cancellationToken);
-        
-        using var hash = MD5.Create();
-        var bytes = Encoding.UTF8.GetBytes(body);
-        var hashBytes = hash.ComputeHash(bytes);
-        
-        return Convert.ToBase64String(hashBytes);
-    }
-    
-    private class EmailTemplate
-    {
-        public int Id { get; set; }
-        public string Name { get; set; } = string.Empty;
-        public string Subject { get; set; } = string.Empty;
-        public string Body { get; set; } = string.Empty;
-        public string CompiledBody { get; set; } = string.Empty;
-        public bool IsCompiled { get; set; }
+        LogInfo($"Stopping email service. Total emails sent: {_emailsSent}");
+        await Task.Delay(100, cancellationToken);
     }
 }
 
 /// <summary>
 /// Mock analytics module - feature priority.
-/// Simulates analytics initialization and data processing.
+/// Simulates analytics data collection and processing.
 /// </summary>
 public class MockAnalyticsModule : BaseEngineModule
 {
-    public override string ModuleName => "Mock Analytics Module";
-    public override string Version => "1.0.0";
+    private int _eventsProcessed = 0;
+    private readonly List<string> _eventTypes = new();
     
-    protected override ModulePriorityConfig ConfigurePriority()
+    public override string ModuleName => "Mock Analytics Module";
+    public override string Version => "2.3.0";
+    
+    protected override ModulePriority ConfigurePriority()
     {
-        return CreateAdvancedPriorityConfig(
-            priority: ModulePriority.Feature,
-            subPriority: 30,
-            canParallelInitialize: true,
-            contextAdjustments: new()
-            {
-                ["Production"] = -10, // Higher priority in production
-                ["Development"] = 15   // Lower priority in development
-            },
-            tags: new() { "analytics", "feature", "reporting" }
-        );
+        return ModulePriority.Create(PriorityLevel.Feature)
+            .WithSubPriority(30)
+            .CanParallelInitialize(true)
+            .WithTags("analytics", "feature", "data")
+            .ForFeature()
+            .Build();
     }
     
     protected override async Task OnInitializeAsync(CancellationToken cancellationToken)
     {
-        LogInfo("Starting analytics initialization simulation...");
+        LogInfo("Initializing analytics module...");
         
-        var stopwatch = Stopwatch.StartNew();
-        await SimulateAnalyticsInitialization(cancellationToken);
-        stopwatch.Stop();
+        // Simulate analytics engine startup
+        await Task.Delay(Random.Shared.Next(400, 900), cancellationToken);
+        LogInfo("Analytics engine started");
         
-        LogInfo($"Analytics initialized in {stopwatch.ElapsedMilliseconds}ms");
-    }
-    
-    private async Task SimulateAnalyticsInitialization(CancellationToken cancellationToken)
-    {
-        // Simulate processing historical data for analytics
-        var dataPoints = new List<DataPoint>();
-        
-        var parallelTasks = Enumerable.Range(0, 4).Select(async batchIndex =>
+        // Simulate event type registration
+        var eventTypes = new[]
         {
-            for (int i = batchIndex * 150; i < (batchIndex + 1) * 150; i++)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                
-                var dataPoint = new DataPoint
-                {
-                    Id = i,
-                    Timestamp = DateTime.UtcNow.AddDays(-i),
-                    Value = ComputeAnalyticsValue(i),
-                    Category = $"Category_{i % 10}",
-                    Metrics = ComputeMetrics(i)
-                };
-                
-                lock (dataPoints)
-                {
-                    dataPoints.Add(dataPoint);
-                }
-                
-                if (i % 30 == 0)
-                {
-                    await Task.Delay(1, cancellationToken);
-                }
-            }
-        });
+            "UserLogin", "PageView", "ButtonClick", "FormSubmit",
+            "Purchase", "Search", "Download", "Share", "Comment", "Rating"
+        };
         
-        await Task.WhenAll(parallelTasks);
-        
-        // Simulate aggregate calculations
-        var aggregates = await ComputeAggregates(dataPoints, cancellationToken);
-        LogInfo($"Computed {aggregates.Count} aggregate values");
-    }
-    
-    private double ComputeAnalyticsValue(int seed)
-    {
-        var random = new Random(seed);
-        var value = 0.0;
-        
-        // Simulate complex analytics computation
-        for (int i = 0; i < 1000; i++)
+        foreach (var eventType in eventTypes)
         {
-            value += Math.Sin(i * seed / 100.0) * random.NextDouble();
+            _eventTypes.Add(eventType);
+            LogDebug($"Registered event type: {eventType}");
+            await Task.Delay(Random.Shared.Next(20, 80), cancellationToken);
         }
         
-        return value;
+        LogInfo($"Analytics module initialized with {_eventTypes.Count} event types");
     }
     
-    private Dictionary<string, double> ComputeMetrics(int seed)
+    protected override async Task OnStartAsync(CancellationToken cancellationToken)
     {
-        var metrics = new Dictionary<string, double>();
-        var random = new Random(seed);
+        LogInfo("Analytics module ready for data collection");
         
-        for (int i = 0; i < 10; i++)
+        // Simulate event processing
+        _ = Task.Run(async () =>
         {
-            metrics[$"metric_{i}"] = random.NextDouble() * 100;
-        }
-        
-        return metrics;
-    }
-    
-    private async Task<Dictionary<string, double>> ComputeAggregates(
-        List<DataPoint> dataPoints, 
-        CancellationToken cancellationToken)
-    {
-        var aggregates = new Dictionary<string, double>();
-        
-        await Task.Run(() =>
-        {
-            foreach (var group in dataPoints.GroupBy(dp => dp.Category))
+            while (!cancellationToken.IsCancellationRequested)
             {
-                cancellationToken.ThrowIfCancellationRequested();
+                await Task.Delay(TimeSpan.FromSeconds(3), cancellationToken);
                 
-                aggregates[$"{group.Key}_sum"] = group.Sum(dp => dp.Value);
-                aggregates[$"{group.Key}_avg"] = group.Average(dp => dp.Value);
-                aggregates[$"{group.Key}_count"] = group.Count();
+                // Simulate processing multiple events
+                var eventsToProcess = Random.Shared.Next(2, 8);
+                for (int i = 0; i < eventsToProcess; i++)
+                {
+                    _eventsProcessed++;
+                    var eventType = _eventTypes[Random.Shared.Next(_eventTypes.Count)];
+                    LogDebug($"Processed {eventType} event #{_eventsProcessed}");
+                    await Task.Delay(Random.Shared.Next(10, 50), cancellationToken);
+                }
+                
+                if (_eventsProcessed % 25 == 0)
+                {
+                    LogInfo($"Total events processed: {_eventsProcessed}");
+                }
             }
         }, cancellationToken);
         
-        return aggregates;
+        await Task.CompletedTask;
     }
     
-    private class DataPoint
+    protected override async Task OnStopAsync(CancellationToken cancellationToken)
     {
-        public int Id { get; set; }
-        public DateTime Timestamp { get; set; }
-        public double Value { get; set; }
-        public string Category { get; set; } = string.Empty;
-        public Dictionary<string, double> Metrics { get; set; } = new();
+        LogInfo($"Stopping analytics module. Total events processed: {_eventsProcessed}");
+        await Task.Delay(200, cancellationToken);
     }
 }
 
 /// <summary>
 /// Mock monitoring module - monitoring priority.
-/// Simulates monitoring system initialization.
+/// Simulates system monitoring and health checks.
 /// </summary>
 public class MockMonitoringModule : BaseEngineModule
 {
-    public override string ModuleName => "Mock Monitoring Module";
-    public override string Version => "1.0.0";
+    private int _healthChecks = 0;
+    private readonly Dictionary<string, object> _metrics = new();
     
-    protected override ModulePriorityConfig ConfigurePriority()
+    public override string ModuleName => "Mock Monitoring Module";
+    public override string Version => "1.8.1";
+    
+    protected override ModulePriority ConfigurePriority()
     {
-        return CreateAdvancedPriorityConfig(
-            priority: ModulePriority.Monitoring,
-            subPriority: 10,
-            canParallelInitialize: true,
-            contextAdjustments: new()
-            {
-                ["Production"] = -20, // Much higher priority in production
-                ["Development"] = 10
-            },
-            tags: new() { "monitoring", "observability", "metrics" }
-        );
+        return ModulePriority.Create(PriorityLevel.Monitoring)
+            .WithSubPriority(35)
+            .CanParallelInitialize(true)
+            .WithTags("monitoring", "observability", "metrics")
+            .ForMonitoring()
+            .Build();
     }
     
     protected override async Task OnInitializeAsync(CancellationToken cancellationToken)
     {
-        LogInfo("Starting monitoring initialization simulation...");
+        LogInfo("Initializing monitoring module...");
         
-        var stopwatch = Stopwatch.StartNew();
-        await SimulateMonitoringInitialization(cancellationToken);
-        stopwatch.Stop();
+        // Simulate monitoring infrastructure setup
+        await Task.Delay(Random.Shared.Next(300, 700), cancellationToken);
+        LogInfo("Monitoring infrastructure ready");
         
-        LogInfo($"Monitoring initialized in {stopwatch.ElapsedMilliseconds}ms");
+        // Initialize metrics
+        var metricNames = new[]
+        {
+            "cpu_usage", "memory_usage", "disk_usage", "network_io",
+            "request_count", "error_rate", "response_time", "active_connections"
+        };
+        
+        foreach (var metricName in metricNames)
+        {
+            _metrics[metricName] = 0.0;
+            LogDebug($"Initialized metric: {metricName}");
+            await Task.Delay(Random.Shared.Next(15, 60), cancellationToken);
+        }
+        
+        LogInfo($"Monitoring module initialized with {_metrics.Count} metrics");
     }
     
-    private async Task SimulateMonitoringInitialization(CancellationToken cancellationToken)
+    protected override async Task OnStartAsync(CancellationToken cancellationToken)
     {
-        // Simulate setting up monitoring infrastructure
-        var monitors = new List<Monitor>();
+        LogInfo("Monitoring module active");
         
-        for (int i = 0; i < 100; i++)
+        // Simulate continuous monitoring
+        _ = Task.Run(async () =>
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            
-            var monitor = new Monitor
+            while (!cancellationToken.IsCancellationRequested)
             {
-                Id = i,
-                Name = $"Monitor_{i}",
-                Type = (MonitorType)(i % 4),
-                Threshold = ComputeThreshold(i),
-                IsActive = true
-            };
-            
-            // Simulate monitor calibration
-            await CalibrateMonitor(monitor, cancellationToken);
-            monitors.Add(monitor);
-            
-            if (i % 10 == 0)
-            {
-                await Task.Delay(1, cancellationToken);
+                await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
+                
+                // Update metrics with random values
+                foreach (var metric in _metrics.Keys.ToList())
+                {
+                    _metrics[metric] = Random.Shared.NextDouble() * 100;
+                }
+                
+                _healthChecks++;
+                LogDebug($"Health check #{_healthChecks} completed");
+                
+                if (_healthChecks % 20 == 0)
+                {
+                    LogInfo($"Completed {_healthChecks} health checks");
+                    
+                    // Log some sample metrics
+                    LogInfo($"Sample metrics - CPU: {_metrics["cpu_usage"]:F1}%, Memory: {_metrics["memory_usage"]:F1}%");
+                }
             }
-        }
-    }
-    
-    private double ComputeThreshold(int seed)
-    {
-        // Simulate complex threshold calculation
-        var result = 0.0;
-        for (int i = 0; i < 500; i++)
-        {
-            result += Math.Log(seed + i + 1) * Math.Sqrt(i + 1);
-        }
-        return result / 500;
-    }
-    
-    private async Task CalibrateMonitor(Monitor monitor, CancellationToken cancellationToken)
-    {
-        // Simulate monitor calibration
-        await Task.Delay(Random.Shared.Next(1, 3), cancellationToken);
+        }, cancellationToken);
         
-        monitor.CalibrationValue = ComputeCalibration(monitor.Id);
-        monitor.IsCalibrated = true;
+        await Task.CompletedTask;
     }
     
-    private double ComputeCalibration(int monitorId)
+    protected override async Task OnStopAsync(CancellationToken cancellationToken)
     {
-        var sum = 0.0;
-        for (int i = 0; i < 100; i++)
-        {
-            sum += Math.Pow(monitorId + i, 1.5);
-        }
-        return sum / 100;
-    }
-    
-    private enum MonitorType
-    {
-        Performance,
-        Memory,
-        Network,
-        Disk
-    }
-    
-    private class Monitor
-    {
-        public int Id { get; set; }
-        public string Name { get; set; } = string.Empty;
-        public MonitorType Type { get; set; }
-        public double Threshold { get; set; }
-        public bool IsActive { get; set; }
-        public double CalibrationValue { get; set; }
-        public bool IsCalibrated { get; set; }
+        LogInfo($"Stopping monitoring module. Total health checks: {_healthChecks}");
+        await Task.Delay(150, cancellationToken);
     }
 }

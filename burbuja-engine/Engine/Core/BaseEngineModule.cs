@@ -5,16 +5,16 @@ using System.Diagnostics;
 namespace BurbujaEngine.Engine.Core;
 
 /// <summary>
-/// Base implementation for engine modules with integrated advanced priority support.
+/// Base implementation for engine modules with integrated unified priority support.
 /// Provides common functionality for all engine modules including semantic priority management.
 /// </summary>
-public abstract class BaseEngineModule : IEngineModule, IAdvancedPriorityModule, IDisposable
+public abstract class BaseEngineModule : IEngineModule, IModulePriorityModule, IDisposable
 {
     private readonly object _stateLock = new();
     private ModuleState _state = ModuleState.Created;
     private readonly List<LogEntry> _recentLogs = new();
     private readonly int _maxLogEntries = 100;
-    private ModulePriorityConfig? _priorityConfig;
+    private ModulePriority? _modulePriority;
     
     protected ILogger Logger { get; private set; } = default!;
     protected IModuleContext Context { get; private set; } = default!;
@@ -33,31 +33,31 @@ public abstract class BaseEngineModule : IEngineModule, IAdvancedPriorityModule,
     public virtual Guid ModuleId => GenerateModuleId(ModuleName);
     
     /// <summary>
-    /// Advanced priority configuration for this module.
+    /// Priority configuration for this module.
     /// </summary>
-    public virtual ModulePriorityConfig PriorityConfig
+    public virtual ModulePriority ModulePriority
     {
         get
         {
-            if (_priorityConfig == null)
+            if (_modulePriority == null)
             {
-                _priorityConfig = ConfigurePriority();
+                _modulePriority = ConfigurePriority();
             }
-            return _priorityConfig;
+            return _modulePriority;
         }
     }
     
     /// <summary>
     /// Legacy priority property for backward compatibility.
-    /// Uses the advanced priority system to calculate effective priority.
+    /// Uses the module priority system to calculate effective priority.
     /// </summary>
-    public virtual int Priority => PriorityConfig.GetEffectivePriority(GetExecutionContext());
+    public virtual int Priority => ModulePriority.GetEffectivePriority(GetExecutionContext());
     
     /// <summary>
     /// Semantic priority level for this module.
     /// Override GetDefaultPriority() to customize this for derived classes.
     /// </summary>
-    public virtual ModulePriority ModulePriorityLevel => PriorityConfig.BasePriority;
+    public virtual PriorityLevel ModulePriorityLevel => ModulePriority.Level;
     
     /// <summary>
     /// Generate a consistent Module ID based on the module name.
@@ -89,16 +89,16 @@ public abstract class BaseEngineModule : IEngineModule, IAdvancedPriorityModule,
     /// Configure the priority for this module.
     /// Override this method to provide custom priority configuration.
     /// </summary>
-    protected virtual ModulePriorityConfig ConfigurePriority()
+    protected virtual ModulePriority ConfigurePriority()
     {
-        return ModulePriorityConfig.Default(GetDefaultPriority());
+        return ModulePriority.Simple(GetDefaultPriority());
     }
     
     /// <summary>
     /// Get the default priority for this module.
     /// Override this to set the base priority level.
     /// </summary>
-    protected virtual ModulePriority GetDefaultPriority() => ModulePriority.Core;
+    protected virtual PriorityLevel GetDefaultPriority() => PriorityLevel.Core;
     
     /// <summary>
     /// Get the current execution context for priority calculations.
@@ -136,39 +136,64 @@ public abstract class BaseEngineModule : IEngineModule, IAdvancedPriorityModule,
     /// <summary>
     /// Helper method to create priority configuration with sub-priority.
     /// </summary>
-    protected static ModulePriorityConfig CreatePriorityConfig(ModulePriority priority, int subPriority = 0)
+    [Obsolete("Use ModulePriority.Create() builder pattern instead.")]
+    protected static LegacyModulePriority CreatePriorityConfig(PriorityLevel priority, int subPriority = 0)
     {
-        return ModulePriorityConfig.WithSubPriority(priority, subPriority);
+#pragma warning disable CS0618 // Type or member is obsolete
+        return (LegacyModulePriority)(int)priority;
+#pragma warning restore CS0618 // Type or member is obsolete
     }
     
     /// <summary>
     /// Helper method to create priority configuration with context adjustments.
     /// </summary>
+    [Obsolete("Use ModulePriority.Create() builder pattern instead.")]
     protected static ModulePriorityConfig CreateContextualPriorityConfig(
-        ModulePriority priority, 
+        PriorityLevel priority, 
         Dictionary<string, int> contextAdjustments)
     {
-        return ModulePriorityConfig.WithContext(priority, contextAdjustments);
+#pragma warning disable CS0618 // Type or member is obsolete
+        return ModulePriorityConfig.WithContext((LegacyModulePriority)(int)priority, contextAdjustments);
+#pragma warning restore CS0618 // Type or member is obsolete
     }
     
     /// <summary>
     /// Helper method to create a comprehensive priority configuration.
     /// </summary>
+    [Obsolete("Use ModulePriority.Create() builder pattern instead.")]
     protected static ModulePriorityConfig CreateAdvancedPriorityConfig(
-        ModulePriority priority,
+        PriorityLevel priority,
         int subPriority = 0,
         bool canParallelInitialize = true,
         Dictionary<string, int>? contextAdjustments = null,
         HashSet<string>? tags = null)
     {
+#pragma warning disable CS0618 // Type or member is obsolete
         return new ModulePriorityConfig
         {
-            BasePriority = priority,
+            BasePriority = (LegacyModulePriority)(int)priority,
             SubPriority = subPriority,
             CanParallelInitialize = canParallelInitialize,
             ContextAdjustments = contextAdjustments ?? new(),
             Tags = tags ?? new()
         };
+#pragma warning restore CS0618 // Type or member is obsolete
+    }
+    
+    /// <summary>
+    /// Create a priority configuration using the builder pattern.
+    /// </summary>
+    protected static ModulePriority CreateModulePriority(PriorityLevel priority)
+    {
+        return ModulePriority.Create(priority).Build();
+    }
+    
+    /// <summary>
+    /// Create a priority with sub-priority.
+    /// </summary>
+    protected static ModulePriority CreateModulePriorityWithSub(PriorityLevel priority, int subPriority)
+    {
+        return ModulePriority.Create(priority).WithSubPriority(subPriority).Build();
     }
     
     public ModuleState State
@@ -475,18 +500,24 @@ public abstract class BaseEngineModule : IEngineModule, IAdvancedPriorityModule,
     {
         // Add priority information to diagnostics
         var context = GetExecutionContext();
+        var analysis = ModulePriority.Analyze(context);
+        
         diagnostics.Metadata["priority_config"] = new
         {
-            base_priority = PriorityConfig.BasePriority.ToString(),
-            base_priority_value = PriorityConfig.BasePriority.ToNumericValue(),
-            sub_priority = PriorityConfig.SubPriority,
-            effective_priority = PriorityConfig.GetEffectivePriority(context),
-            execution_context = context,
-            can_parallel_initialize = PriorityConfig.CanParallelInitialize,
-            context_adjustments = PriorityConfig.ContextAdjustments,
-            tags = PriorityConfig.Tags.ToList(),
-            priority_category = PriorityConfig.BasePriority.GetCategoryName(),
-            priority_description = PriorityConfig.BasePriority.GetDescription()
+            base_priority = analysis.Level.ToString(),
+            base_priority_value = analysis.Level.ToNumericValue(),
+            sub_priority = analysis.SubPriority,
+            effective_priority = analysis.EffectivePriority,
+            execution_context = analysis.Context,
+            context_adjustment = analysis.ContextAdjustment,
+            weight = analysis.Weight,
+            can_parallel_initialize = analysis.CanParallelInitialize,
+            context_adjustments = ModulePriority.ContextAdjustments,
+            tags = analysis.Tags,
+            dependencies = analysis.Dependencies,
+            priority_category = analysis.CategoryName,
+            priority_description = analysis.Description,
+            metadata = analysis.Metadata
         };
         
         return Task.CompletedTask;

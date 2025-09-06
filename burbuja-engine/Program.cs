@@ -115,7 +115,7 @@ app.MapPost("/engine/stress-test", async (IServiceProvider serviceProvider) =>
 // Priority system demonstration endpoint
 app.MapGet("/engine/priorities", (IBurbujaEngine engine) =>
 {
-    var priorities = BurbujaEngine.Engine.Core.ModulePriorityExtensions.GetAllPrioritiesInOrder()
+    var priorities = BurbujaEngine.Engine.Core.PriorityLevelExtensions.GetAllPrioritiesInOrder()
         .Select(p => new
         {
             name = p.ToString(),

@@ -22,19 +22,15 @@ public class DatabaseModule : BaseEngineModule
     /// Configure priority for the database module.
     /// Database is critical infrastructure that other modules depend on.
     /// </summary>
-    protected override ModulePriorityConfig ConfigurePriority()
+    protected override ModulePriority ConfigurePriority()
     {
-        return CreateAdvancedPriorityConfig(
-            priority: ModulePriority.Infrastructure,
-            subPriority: 10, // High priority within infrastructure
-            canParallelInitialize: false, // Database should initialize alone
-            contextAdjustments: new()
-            {
-                ["Development"] = -5, // Slightly higher priority in development
-                ["Testing"] = -10 // Even higher priority in testing
-            },
-            tags: new() { "database", "infrastructure", "critical" }
-        );
+        return ModulePriority.Create(PriorityLevel.Infrastructure)
+            .WithSubPriority(10) // High priority within infrastructure
+            .CanParallelInitialize(false) // Database should initialize alone
+            .WithContextAdjustment("Development", -5) // Slightly higher priority in development
+            .WithContextAdjustment("Testing", -10) // Even higher priority in testing
+            .WithTags("database", "infrastructure", "critical")
+            .Build();
     }
     
     /// <summary>

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using BurbujaEngine.Engine.Core;
 using BurbujaEngine.Testing.StressTest;
+using BurbujaEngine.Testing.SystemTest;
 
 namespace BurbujaEngine.Controllers;
 
@@ -21,268 +22,334 @@ public class PriorityDemoController : ControllerBase
     }
 
     /// <summary>
-    /// Get detailed information about the priority system.
+    /// Get an overview of all modules and their priorities.
     /// </summary>
-    [HttpGet("info")]
-    public IActionResult GetPrioritySystemInfo()
-    {
-        var priorities = ModulePriorityExtensions.GetAllPrioritiesInOrder()
-            .Select(p => new
-            {
-                name = p.ToString(),
-                value = p.ToNumericValue(),
-                category = p.GetCategoryName(),
-                description = p.GetDescription()
-            });
-
-        var moduleInfo = _engine.Modules.Select(m => new
-        {
-            module_id = m.ModuleId,
-            module_name = m.ModuleName,
-            version = m.Version,
-            state = m.State.ToString(),
-            legacy_priority = m.Priority,
-            semantic_priority = GetSemanticPriority(m),
-            is_advanced = m is IAdvancedPriorityModule,
-            priority_details = GetPriorityDetails(m)
-        });
-
-        return Ok(new
-        {
-            system_info = new
-            {
-                version = "2.0.0",
-                description = "Semantic Priority System for BurbujaEngine",
-                features = new[]
-                {
-                    "Semantic priority levels with clear meanings",
-                    "Context-aware priority adjustments",
-                    "Sub-priority support for fine-tuning",
-                    "Parallel initialization control",
-                    "Backward compatibility with legacy priorities",
-                    "Comprehensive diagnostics and monitoring"
-                }
-            },
-            available_priorities = priorities,
-            registered_modules = moduleInfo,
-            initialization_order = _engine.Modules.Select((m, index) => new
-            {
-                order = index + 1,
-                module_name = m.ModuleName,
-                effective_priority = m.Priority
-            })
-        });
-    }
-
-    /// <summary>
-    /// Demonstrate priority behavior in different contexts.
-    /// </summary>
-    [HttpGet("context-demo")]
-    public IActionResult DemonstratePriorityContexts()
-    {
-        var contexts = new[] { "Development", "Testing", "Production" };
-        var contextDemo = new Dictionary<string, object>();
-
-        foreach (var context in contexts)
-        {
-            var modules = _engine.Modules
-                .OfType<IAdvancedPriorityModule>()
-                .Select(m => new
-                {
-                    module_name = m.ModuleName,
-                    base_priority = m.PriorityConfig.BasePriority.ToString(),
-                    base_value = m.PriorityConfig.BasePriority.ToNumericValue(),
-                    sub_priority = m.PriorityConfig.SubPriority,
-                    effective_priority = m.PriorityConfig.GetEffectivePriority(context),
-                    context_adjustment = m.PriorityConfig.ContextAdjustments.GetValueOrDefault(context, 0)
-                })
-                .OrderBy(m => m.effective_priority)
-                .ToList();
-
-            contextDemo[context] = modules;
-        }
-
-        return Ok(new
-        {
-            description = "Priority behavior demonstration across different execution contexts",
-            contexts = contextDemo,
-            explanation = new
-            {
-                context_adjustments = "Modules can have different priorities based on execution context",
-                effective_priority = "Base priority + sub-priority + context adjustment",
-                use_cases = new[]
-                {
-                    "Lower monitoring priority in development",
-                    "Higher database priority in production",
-                    "Delayed non-critical services in testing"
-                }
-            }
-        });
-    }
-
-    /// <summary>
-    /// Compare old vs new priority system.
-    /// </summary>
-    [HttpGet("comparison")]
-    public IActionResult ComparePrioritySystems()
-    {
-        return Ok(new
-        {
-            old_system = new
-            {
-                description = "Legacy integer-based priority system",
-                example_values = new[] { 100, 1000, 500, 750 },
-                problems = new[]
-                {
-                    "Arbitrary numeric values without clear meaning",
-                    "Difficult to determine appropriate priority for new modules",
-                    "No context awareness",
-                    "Hard to maintain and understand",
-                    "No semantic relationships between priorities"
-                }
-            },
-            new_system = new
-            {
-                description = "Semantic priority system with context awareness",
-                priority_levels = ModulePriorityExtensions.GetAllPrioritiesInOrder()
-                    .Select(p => new { name = p.ToString(), value = p.ToNumericValue(), description = p.GetDescription() }),
-                advantages = new[]
-                {
-                    "Clear semantic meaning for each priority level",
-                    "Context-aware priority adjustments",
-                    "Sub-priority support for fine-tuning",
-                    "Self-documenting code",
-                    "Extensible design for future requirements",
-                    "Backward compatibility with existing code"
-                }
-            },
-            migration_guide = new
-            {
-                step1 = "Inherit from AdvancedBaseEngineModule instead of BaseEngineModule",
-                step2 = "Override ConfigurePriority() method",
-                step3 = "Use semantic priority levels (ModulePriority enum)",
-                step4 = "Add context adjustments if needed",
-                step5 = "Set sub-priorities for fine-tuning within same level"
-            }
-        });
-    }
-
-    /// <summary>
-    /// Run a lightweight stress test demonstration.
-    /// </summary>
-    [HttpPost("demo-test")]
-    public async Task<IActionResult> RunDemoTest()
+    [HttpGet("overview")]
+    public IActionResult GetPriorityOverview()
     {
         try
         {
-            _logger.LogInformation("Starting priority system demonstration test...");
+            var priorities = PriorityLevelExtensions.GetAllPrioritiesInOrder()
+                .Select(p => new
+                {
+                    level = p.ToString(),
+                    value = p.ToNumericValue(),
+                    category = p.GetCategoryName(),
+                    description = p.GetDescription()
+                });
 
-            // Create a simple demonstration of the priority system
-            var demoResult = await CreateDemoEngine();
+            var modules = _engine.Modules;
+            var moduleInfo = modules.Select(m => new
+            {
+                module_id = m.ModuleId,
+                module_name = m.ModuleName,
+                version = m.Version,
+                state = m.State.ToString(),
+                priority = m.Priority,
+                is_priority_module = m is IModulePriorityModule,
+                priority_level = m is IModulePriorityModule pm ? pm.ModulePriority.Level.ToString() : "Legacy"
+            });
 
             return Ok(new
             {
-                message = "Priority system demonstration completed successfully",
-                timestamp = DateTime.UtcNow,
-                demo_result = demoResult
+                total_modules = modules.Count(),
+                priority_levels = priorities,
+                modules = moduleInfo
             });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Demo test failed: {Message}", ex.Message);
-            return StatusCode(500, new
-            {
-                error = "Demo test failed",
-                message = ex.Message,
-                timestamp = DateTime.UtcNow
-            });
+            _logger.LogError(ex, "Error getting priority overview");
+            return StatusCode(500, new { error = ex.Message });
         }
     }
 
-    private string GetSemanticPriority(IEngineModule module)
+    /// <summary>
+    /// Get detailed priority configuration for modules that support unified priority.
+    /// </summary>
+    [HttpGet("detailed")]
+    public IActionResult GetDetailedPriorityInfo([FromQuery] string? context = null)
     {
-        return module switch
+        try
         {
-            IAdvancedPriorityModule advanced => advanced.PriorityConfig.BasePriority.ToString(),
-            _ => "Legacy"
-        };
+            var modules = _engine.Modules;
+            var priorityModules = modules
+                .OfType<IModulePriorityModule>()
+                .Select(m => new
+                {
+                    module_id = m.ModuleId,
+                    module_name = m.ModuleName,
+                    base_priority = m.ModulePriority.Level.ToString(),
+                    base_value = m.ModulePriority.Level.ToNumericValue(),
+                    sub_priority = m.ModulePriority.SubPriority,
+                    effective_priority = m.ModulePriority.GetEffectivePriority(context),
+                    context_adjustment = m.ModulePriority.ContextAdjustments.GetValueOrDefault(context, 0),
+                    can_parallel = m.ModulePriority.CanParallelInitialize,
+                    weight = m.ModulePriority.Weight,
+                    tags = m.ModulePriority.Tags,
+                    dependencies = m.ModulePriority.DependsOn
+                })
+                .OrderBy(m => m.effective_priority);
+
+            return Ok(new
+            {
+                context = context ?? "default",
+                priority_modules_count = priorityModules.Count(),
+                modules = priorityModules
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting detailed priority info");
+            return StatusCode(500, new { error = ex.Message });
+        }
     }
 
-    private object GetPriorityDetails(IEngineModule module)
+    /// <summary>
+    /// Get all available priority levels and their descriptions.
+    /// </summary>
+    [HttpGet("levels")]
+    public IActionResult GetPriorityLevels()
     {
-        if (module is IAdvancedPriorityModule advanced)
+        try
         {
+            var levels = new
+            {
+                priority_levels = PriorityLevelExtensions.GetAllPrioritiesInOrder()
+                    .Select(p => new
+                    {
+                        name = p.ToString(),
+                        value = p.ToNumericValue(),
+                        category = p.GetCategoryName(),
+                        description = p.GetDescription(),
+                        range = new
+                        {
+                            min = p.ToNumericValue(),
+                            max = p.ToNumericValue() + 99
+                        }
+                    }),
+                total_levels = Enum.GetValues<PriorityLevel>().Length,
+                ordering_note = "Lower numeric values have higher priority (initialize first)"
+            };
+
+            return Ok(levels);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting priority levels");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Run a priority-focused stress test.
+    /// </summary>
+    [HttpPost("stress-test")]
+    public async Task<IActionResult> RunPriorityStressTest()
+    {
+        try
+        {
+            var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
+            var stressTestLogger = loggerFactory.CreateLogger<PriorityStressTest>();
+            var stressTest = new PriorityStressTest(stressTestLogger);
+
+            _logger.LogInformation("Starting priority stress test...");
+
+            var result = await stressTest.RunStressTestAsync();
+
+            return Ok(new
+            {
+                test_summary = new
+                {
+                    success = result.IsSuccessful,
+                    duration = result.TotalDuration,
+                    started_at = result.StartTime,
+                    completed_at = result.EndTime,
+                    total_tests = result.TestResults.Count,
+                    error_message = result.ErrorMessage
+                },
+                system_metrics = new
+                {
+                    initial = result.InitialSystemMetrics,
+                    final = result.FinalSystemMetrics,
+                    delta = result.SystemMetricsDelta
+                },
+                test_results = result.TestResults.Select(t => new
+                {
+                    test_name = t.TestName,
+                    success = t.IsSuccessful,
+                    duration = t.Duration,
+                    message = t.Message,
+                    error = t.ErrorMessage,
+                    metrics = t.Metrics,
+                    system_impact = t.SystemMetrics
+                })
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error running priority stress test");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Run the complete system test suite.
+    /// </summary>
+    [HttpPost("system-test")]
+    public async Task<IActionResult> RunSystemTest()
+    {
+        try
+        {
+            var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
+            var systemTestLogger = loggerFactory.CreateLogger<EngineSystemTestRunner>();
+            
+            var testRunner = new EngineSystemTestRunner(systemTestLogger, _engine);
+            var report = await testRunner.RunCompleteTestSuiteAsync();
+
+            return Ok(new
+            {
+                test_summary = new
+                {
+                    total_tests = report.TestResults.Count,
+                    passed = report.TestResults.Count(t => t.IsSuccessful),
+                    failed = report.TestResults.Count(t => !t.IsSuccessful),
+                    duration = report.TotalDuration,
+                    started_at = report.StartTime,
+                    completed_at = report.EndTime,
+                    overall_success = report.IsSuccessful,
+                    error_message = report.ErrorMessage
+                },
+                system_info = report.SystemInfo,
+                metrics = new
+                {
+                    baseline = report.BaselineMetrics,
+                    final = report.FinalMetrics
+                },
+                test_results = report.TestResults.Select(t => new
+                {
+                    test_name = t.TestName,
+                    success = t.IsSuccessful,
+                    duration = t.Duration,
+                    message = t.Message,
+                    error = t.ErrorMessage,
+                    metrics = t.Metrics
+                })
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error running system test");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Get priority configuration for a specific module.
+    /// </summary>
+    [HttpGet("module/{moduleId}/priority")]
+    public IActionResult GetModulePriorityConfig(Guid moduleId, [FromQuery] string? context = null)
+    {
+        try
+        {
+            var modules = _engine.Modules;
+            var module = modules.FirstOrDefault(m => m.ModuleId == moduleId);
+
+            if (module == null)
+            {
+                return NotFound(new { error = "Module not found" });
+            }
+
+            return Ok(GetModulePriorityInfo(module, context));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting module priority config for {ModuleId}", moduleId);
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Analyze priority relationships between modules.
+    /// </summary>
+    [HttpGet("analysis")]
+    public IActionResult AnalyzePriorityRelationships([FromQuery] string? context = null)
+    {
+        try
+        {
+            var modules = _engine.Modules;
+            var priorityModules = modules.OfType<IModulePriorityModule>().ToList();
+
+            var relationships = new List<object>();
+
+            for (int i = 0; i < priorityModules.Count; i++)
+            {
+                for (int j = i + 1; j < priorityModules.Count; j++)
+                {
+                    var moduleA = priorityModules[i];
+                    var moduleB = priorityModules[j];
+
+                    var shouldABeforeB = moduleA.ModulePriority.ShouldInitializeBefore(moduleB.ModulePriority, context);
+
+                    relationships.Add(new
+                    {
+                        module_a = moduleA.ModuleName,
+                        module_b = moduleB.ModuleName,
+                        a_before_b = shouldABeforeB,
+                        a_priority = moduleA.ModulePriority.GetEffectivePriority(context),
+                        b_priority = moduleB.ModulePriority.GetEffectivePriority(context),
+                        reason = shouldABeforeB ? "A has higher priority" : "B has higher priority"
+                    });
+                }
+            }
+
+            return Ok(new
+            {
+                context = context ?? "default",
+                total_relationships = relationships.Count,
+                relationships = relationships.OrderBy(r => ((dynamic)r).a_priority)
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error analyzing priority relationships");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    private object GetModulePriorityInfo(IEngineModule module, string? context)
+    {
+        if (module is IModulePriorityModule priorityModule)
+        {
+            var analysis = priorityModule.ModulePriority.Analyze(context);
+            
             return new
             {
-                base_priority = advanced.PriorityConfig.BasePriority.ToString(),
-                sub_priority = advanced.PriorityConfig.SubPriority,
-                can_parallel_init = advanced.PriorityConfig.CanParallelInitialize,
-                context_adjustments = advanced.PriorityConfig.ContextAdjustments,
-                tags = advanced.PriorityConfig.Tags.ToList()
+                has_config = true,
+                config = new
+                {
+                    level = analysis.Level.ToString(),
+                    level_value = analysis.Level.ToNumericValue(),
+                    sub_priority = analysis.SubPriority,
+                    can_parallel = analysis.CanParallelInitialize,
+                    weight = analysis.Weight,
+                    tags = analysis.Tags,
+                    dependencies = analysis.Dependencies,
+                    context_adjustments = priorityModule.ModulePriority.ContextAdjustments,
+                    metadata = priorityModule.ModulePriority.Metadata,
+                    effective_priority = analysis.EffectivePriority,
+                    context_adjustment = analysis.ContextAdjustment,
+                    category_name = analysis.CategoryName,
+                    description = analysis.Description
+                }
             };
         }
 
         return new
         {
-            type = "legacy",
-            priority_value = module.Priority
+            has_config = false,
+            legacy_priority = module.Priority,
+            note = "Module uses legacy priority system"
         };
-    }
-
-    private async Task<object> CreateDemoEngine()
-    {
-        var services = new ServiceCollection();
-        services.AddLogging(builder => builder.AddConsole().SetMinimumLevel(LogLevel.Warning));
-
-        var engineId = Guid.NewGuid();
-        services.AddBurbujaEngine(engineId, engine =>
-        {
-            engine.WithConfiguration(config =>
-            {
-                config.WithVersion("1.0.0-demo")
-                      .WithValue("ExecutionContext", "Development")
-                      .EnableParallelInitialization(true);
-            });
-
-            // Add a few mock modules for demonstration
-            engine.AddModule<MockConfigurationModule>();
-            engine.AddModule<MockCacheModule>();
-            engine.AddModule<MockEmailServiceModule>();
-        });
-
-        var serviceProvider = services.BuildServiceProvider();
-
-        try
-        {
-            var demoEngine = serviceProvider.GetRequiredService<IBurbujaEngine>();
-
-            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-            var initResult = await demoEngine.InitializeAsync();
-            var startResult = await demoEngine.StartAsync();
-            stopwatch.Stop();
-
-            var result = new
-            {
-                engine_id = engineId,
-                initialization_success = initResult.Success,
-                start_success = startResult.Success,
-                total_time_ms = stopwatch.ElapsedMilliseconds,
-                module_count = demoEngine.Modules.Count,
-                initialization_order = demoEngine.Modules.Select((m, index) => new
-                {
-                    order = index + 1,
-                    module_name = m.ModuleName,
-                    priority = m.Priority,
-                    semantic_priority = GetSemanticPriority(m)
-                }).ToList()
-            };
-
-            await demoEngine.ShutdownAsync();
-            return result;
-        }
-        finally
-        {
-            serviceProvider.Dispose();
-        }
     }
 }
