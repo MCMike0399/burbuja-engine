@@ -35,13 +35,15 @@ public class DatabaseModule : BaseEngineModule
     
     /// <summary>
     /// Configure database services.
+    /// Note: In the new architecture, database services should be registered 
+    /// before the module is added to the engine. This method is kept for 
+    /// backward compatibility but should not be relied upon.
     /// </summary>
     public override void ConfigureServices(IServiceCollection services)
     {
-        // Add database services to the container
-        services.AddBurbujaEngineDatabase();
-        
-        LogInfo("Database services configured");
+        // Services should be configured via AddDatabaseModule() extension method
+        // This ensures proper dependency registration order
+        LogInfo("Database module service configuration (services should be pre-configured)");
     }
     
     /// <summary>

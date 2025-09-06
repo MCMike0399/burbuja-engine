@@ -51,9 +51,9 @@ DOCKER_COMPOSE=""
 # ===== LOGGING FUNCTIONS =====
 log_debug() { echo -e "${MAGENTA}[DEBUG]${NC} $1"; }
 log_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
-log_success() { echo -e "${GREEN}[✓]${NC} $1"; }
-log_warning() { echo -e "${YELLOW}[!]${NC} $1"; }
-log_error() { echo -e "${RED}[✗]${NC} $1"; }
+log_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
+log_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
+log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 log_step() { echo -e "${CYAN}[STEP]${NC} $1"; }
 
 # ===== BANNER =====
@@ -183,16 +183,16 @@ parse_args() {
                 DEV_MODE=true
                 ONLY_DATABASE=true    # We only need MongoDB container
                 SKIP_BUILD=true       # No need to build app container
-                log_info "🚀 Development mode: Running dotnet locally with hot reload"
+                log_info "Development mode: Running dotnet locally with hot reload"
                 ;;
             --only-database)
                 ONLY_DATABASE=true
                 SKIP_BUILD=true    # No need to build app container
-                log_info "🗄️ Database-only mode: Starting MongoDB container for local C# development"
+                log_info "Database-only mode: Starting MongoDB container for local C# development"
                 ;;
             --prod)
                 PROD_MODE=true
-                log_warning "🚧 Production mode is TODO - not yet implemented"
+                log_warning "Production mode is TODO - not yet implemented"
                 ;;
             -h|--help)
                 print_usage
@@ -458,12 +458,12 @@ debug_container_failure() {
     
     # Check for specific .NET/C# issues
     if echo "$logs" | grep -q "System\.\|Microsoft\.\|dotnet"; then
-        log_debug "🐛 DETECTED: .NET/C# application issues"
+        log_debug "DETECTED: .NET/C# application issues"
         log_debug "   Check if all required packages are restored"
     fi
     
     if echo "$logs" | grep -q "ConnectionError\|MongoDB"; then
-        log_debug "🐛 DETECTED: MongoDB connection issues"
+        log_debug "DETECTED: MongoDB connection issues"
         log_debug "   Check if MongoDB container is running and accessible"
     fi
     
@@ -519,7 +519,7 @@ check_mongodb_status() {
     fi
     
     if [[ "$mongodb_status" == "running" ]]; then
-        log_info "🗄️ MongoDB container is already running"
+        log_info "MongoDB container is already running"
         
         # Quick connection test
         if $compose_cmd exec -T mongodb mongosh --eval "db.adminCommand('ping')" &>/dev/null; then
@@ -531,10 +531,10 @@ check_mongodb_status() {
             return 2  # Restarted, need to wait
         fi
     elif [[ "$mongodb_status" == "exited" ]] || [[ "$mongodb_status" == "created" ]]; then
-        log_info "🗄️ MongoDB container exists but is stopped, starting..."
+        log_info "MongoDB container exists but is stopped, starting..."
         return 1  # Exists but stopped
     else
-        log_info "🗄️ MongoDB container doesn't exist, creating and starting..."
+        log_info "MongoDB container doesn't exist, creating and starting..."
         return 1  # Doesn't exist
     fi
 }
@@ -556,7 +556,7 @@ start_services() {
         elif [[ $mongodb_check_result -eq 2 ]]; then
             log_info "MongoDB was restarted, will wait for it to be ready"
         else
-            log_info "🗄️ Starting MongoDB container for local C# development"
+            log_info "Starting MongoDB container for local C# development"
             if $compose_cmd up -d mongodb; then
                 log_success "MongoDB container started successfully"
             else
@@ -565,7 +565,7 @@ start_services() {
             fi
         fi
     elif [[ "$PROD_MODE" == "true" ]]; then
-        log_error "🚧 Production mode is not yet implemented"
+        log_error "Production mode is not yet implemented"
         log_info "TODO: Implement full production deployment with both API and database containers"
         return 1
     else
@@ -593,7 +593,7 @@ wait_for_services() {
     
     # In database-only mode, we only check the database
     if [[ "$ONLY_DATABASE" == "true" ]]; then
-        log_info "🗄️ Database-only mode: Checking MongoDB container..."
+        log_info "Database-only mode: Checking MongoDB container..."
         
         # First, do a quick container status check
         local compose_cmd="$(get_compose_command)"
@@ -760,8 +760,8 @@ show_project_info() {
         echo -e "  Connection URI:  ${YELLOW}mongodb://localhost:27017/burbuja_engine${NC}"
         echo
         echo -e "${CYAN}Hot Reload:${NC}"
-        echo -e "  🔄 Code changes will automatically restart the server${NC}"
-        echo -e "  🛑 Press Ctrl+C to stop the development server${NC}"
+        echo -e "  Code changes will automatically restart the server${NC}"
+        echo -e "  Press Ctrl+C to stop the development server${NC}"
         echo
         echo -e "${CYAN}Data Directory:${NC}"
         echo -e "  MongoDB Data:    ${YELLOW}${PROJECT_ROOT}/${LOCAL_DATA_DIR}/mongodb/${NC}"
@@ -772,7 +772,7 @@ show_project_info() {
         echo -e "  Check DB Logs:   ${YELLOW}$DOCKER_COMPOSE logs -f mongodb${NC}"
         echo -e "  Stop Database:   ${YELLOW}$DOCKER_COMPOSE down${NC}"
         echo
-        echo -e "${CYAN}Development Mode Active! 🚀${NC}"
+        echo -e "${CYAN}Development Mode Active!${NC}"
         echo
         return
     fi
@@ -806,7 +806,7 @@ show_project_info() {
         echo -e "  Stop Database:   ${YELLOW}$DOCKER_COMPOSE down${NC}"
         echo -e "  Restart DB:      ${YELLOW}$DOCKER_COMPOSE restart mongodb${NC}"
         echo
-        echo -e "${CYAN}Ready for Local Development! 🚀${NC}"
+        echo -e "${CYAN}Ready for Local Development!${NC}"
         echo -e "Start your BurbujaEngine app with: ${YELLOW}dotnet run${NC}"
         echo
         return
@@ -842,7 +842,7 @@ show_project_info() {
 # ===== MONITOR APP STARTUP =====
 monitor_app_startup() {
     if [[ "$ONLY_DATABASE" == "true" ]]; then
-        log_info "🗄️ Monitoring MongoDB container startup..."
+        log_info "Monitoring MongoDB container startup..."
         
         local compose_cmd="$(get_compose_command)"
         
@@ -943,11 +943,11 @@ run_dotnet_dev() {
     export ASPNETCORE_ENVIRONMENT="Development"
     export ASPNETCORE_URLS="http://+:8000"
     
-    log_info "🚀 Starting BurbujaEngine application with hot reload..."
-    log_info "📍 Application will be available at: http://localhost:8000"
-    log_info "📚 API documentation at: http://localhost:8000/swagger"
-    log_info "🔄 Hot reload enabled - code changes will restart the server"
-    log_info "🛑 Press Ctrl+C to stop the server"
+    log_info "Starting BurbujaEngine application with hot reload..."
+    log_info "Application will be available at: http://localhost:8000"
+    log_info "API documentation at: http://localhost:8000/swagger"
+    log_info "Hot reload enabled - code changes will restart the server"
+    log_info "Press Ctrl+C to stop the server"
     echo
     
     # Run dotnet with hot reload
@@ -983,7 +983,7 @@ main() {
     
     # Check if production mode is requested
     if [[ "$PROD_MODE" == "true" ]]; then
-        log_error "🚧 Production mode is not yet implemented"
+        log_error "Production mode is not yet implemented"
         log_info "TODO: Implement full containerized deployment with both API and database containers"
         show_project_info
         exit 1
@@ -1001,7 +1001,7 @@ main() {
     
     # Development mode: MongoDB + local dotnet
     if [[ "$DEV_MODE" == "true" ]]; then
-        log_info "🚀 Starting in development mode: MongoDB container + local dotnet with hot reload"
+        log_info "Starting in development mode: MongoDB container + local dotnet with hot reload"
         
         # Start only MongoDB (with optimized checking)
         if ! start_services; then
@@ -1015,15 +1015,15 @@ main() {
         # Try immediate connection first
         local compose_cmd="$(get_compose_command)"
         if $compose_cmd exec -T mongodb mongosh --eval "db.adminCommand('ping')" &>/dev/null; then
-            log_success "✅ MongoDB is immediately ready!"
+            log_success "MongoDB is immediately ready!"
             mongodb_ready=true
         else
             # Quick startup monitoring
             if monitor_app_startup; then
                 mongodb_ready=true
             else
-                log_info "🗄️ MongoDB is starting up in the background..."
-                log_info "💡 Continuing with dotnet startup - connection will be retried automatically"
+                log_info "MongoDB is starting up in the background..."
+                log_info "Continuing with dotnet startup - connection will be retried automatically"
             fi
         fi
         
@@ -1032,7 +1032,7 @@ main() {
             set +e  # Disable error trap for health checks
             if verify_services_health; then
                 test_database_connection
-                log_success "✅ MongoDB container is fully ready!"
+                log_success "MongoDB container is fully ready!"
             fi
             set -e  # Re-enable error handling
         fi
@@ -1044,7 +1044,7 @@ main() {
     
     # Database-only mode: simplified startup
     if [[ "$ONLY_DATABASE" == "true" ]]; then
-        log_info "🗄️ Starting in database-only mode for local C# development"
+        log_info "Starting in database-only mode for local C# development"
         
         # Start only MongoDB
         if ! start_services; then
@@ -1064,12 +1064,12 @@ main() {
         if verify_services_health; then
             test_database_connection
             show_project_info
-            log_success "✅ MongoDB container is ready for local C# development!"
-            log_info "💡 You can now run 'dotnet run' to start your BurbujaEngine app locally"
+            log_success "MongoDB container is ready for local C# development!"
+            log_info "You can now run 'dotnet run' to start your BurbujaEngine app locally"
         else
-            log_info "🗄️ MongoDB container is starting up..."
+            log_info "MongoDB container is starting up..."
             show_project_info
-            log_info "💡 Try connecting in a few seconds with your BurbujaEngine app"
+            log_info "Try connecting in a few seconds with your BurbujaEngine app"
         fi
         
         set -e  # Re-enable error handling

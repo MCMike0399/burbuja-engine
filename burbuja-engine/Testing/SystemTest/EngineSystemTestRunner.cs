@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using BurbujaEngine.Engine.Core;
+using BurbujaEngine.Engine.Extensions;
 using BurbujaEngine.Testing.StressTest;
 
 namespace BurbujaEngine.Testing.SystemTest;
@@ -35,7 +36,7 @@ public class EngineSystemTestRunner
     /// </summary>
     public async Task<SystemTestReport> RunCompleteTestSuiteAsync(CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("🚀 Starting BurbujaEngine Complete System Test Suite");
+        _logger.LogInformation("Starting BurbujaEngine Complete System Test Suite");
         _logger.LogInformation("=" + new string('=', 79));
         
         var overallStopwatch = Stopwatch.StartNew();
@@ -86,7 +87,7 @@ public class EngineSystemTestRunner
             report.TotalDuration = overallStopwatch.Elapsed;
             report.IsSuccessful = report.TestResults.All(r => r.IsSuccessful);
             
-            _logger.LogInformation("🎉 All tests completed!");
+            _logger.LogInformation("All tests completed!");
             _logger.LogInformation($"Total execution time: {overallStopwatch.Elapsed.TotalSeconds:F2} seconds");
             _logger.LogInformation($"Success rate: {report.TestResults.Count(r => r.IsSuccessful)}/{report.TestResults.Count}");
             
@@ -137,7 +138,7 @@ public class EngineSystemTestRunner
             result.EndTime = DateTime.UtcNow;
             result.Duration = stopwatch.Elapsed;
             result.IsSuccessful = true;
-            result.Message += " ✅";
+            result.Message += " [PASS]";
             
             return result;
         }
@@ -188,7 +189,7 @@ public class EngineSystemTestRunner
             result.EndTime = DateTime.UtcNow;
             result.Duration = stopwatch.Elapsed;
             result.IsSuccessful = true;
-            result.Message = $"Priority system accessible with {priorities.Count} levels ✅";
+            result.Message = $"Priority system accessible with {priorities.Count} levels [PASS]";
             
             return Task.FromResult(result);
         }
@@ -224,7 +225,7 @@ public class EngineSystemTestRunner
                 var health = await _engine.GetHealthAsync(cancellationToken);
                 result.Metrics["overall_status"] = health.Status.ToString();
                 result.Metrics["message"] = health.Message ?? "No message";
-                result.Message = $"Engine health: {health.Status} ✅";
+                result.Message = $"Engine health: {health.Status} [PASS]";
             }
             else
             {
@@ -232,7 +233,7 @@ public class EngineSystemTestRunner
                 var health = await testEngine.GetHealthAsync(cancellationToken);
                 result.Metrics["overall_status"] = health.Status.ToString();
                 result.Metrics["message"] = health.Message ?? "No message";
-                result.Message = $"Test engine health: {health.Status} ✅";
+                result.Message = $"Test engine health: {health.Status} [PASS]";
                 await testEngine.ShutdownAsync(cancellationToken);
             }
             
@@ -300,7 +301,7 @@ public class EngineSystemTestRunner
             result.EndTime = DateTime.UtcNow;
             result.Duration = stopwatch.Elapsed;
             result.IsSuccessful = true;
-            result.Message = $"System metrics collected successfully ✅";
+            result.Message = $"System metrics collected successfully [PASS]";
             
             return result;
         }
@@ -371,7 +372,7 @@ public class EngineSystemTestRunner
             
             if (stressReport.IsSuccessful)
             {
-                result.Message = $"Stress test completed successfully with {stressReport.TestResults.Count} tests ✅";
+                result.Message = $"Stress test completed successfully with {stressReport.TestResults.Count} tests [PASS]";
             }
             else
             {
@@ -401,24 +402,22 @@ public class EngineSystemTestRunner
         var services = new ServiceCollection();
         services.AddLogging(builder => builder.AddConsole().SetMinimumLevel(LogLevel.Warning));
         
-        services.AddBurbujaEngine(Guid.NewGuid(), engine =>
-        {
-            engine.WithConfiguration(config =>
+        services.AddBurbujaEngine(Guid.NewGuid())
+            .WithConfiguration(config =>
             {
                 config.WithVersion("1.0.0-system-test")
                       .WithValue("ExecutionContext", "Testing")
                       .EnableParallelInitialization(true);
-            });
-            
-            // Add test modules
-            engine.AddModule<MockConfigurationModule>();
-            engine.AddModule<MockSecurityModule>();
-            engine.AddModule<MockCacheModule>();
-            engine.AddModule<MockBusinessLogicModule>();
-            engine.AddModule<MockEmailServiceModule>();
-            engine.AddModule<MockAnalyticsModule>();
-            engine.AddModule<MockMonitoringModule>();
-        });
+            })
+            // Add test modules using the new explicit pattern
+            .AddEngineModule<MockConfigurationModule>()
+            .AddEngineModule<MockSecurityModule>()
+            .AddEngineModule<MockCacheModule>()
+            .AddEngineModule<MockBusinessLogicModule>()
+            .AddEngineModule<MockEmailServiceModule>()
+            .AddEngineModule<MockAnalyticsModule>()
+            .AddEngineModule<MockMonitoringModule>()
+            .BuildEngine();
         
         var serviceProvider = services.BuildServiceProvider();
         var testEngine = serviceProvider.GetRequiredService<IBurbujaEngine>();

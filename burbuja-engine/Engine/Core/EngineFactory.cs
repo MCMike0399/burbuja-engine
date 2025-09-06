@@ -43,6 +43,12 @@ public class EngineBuilder
     private readonly List<Func<IBurbujaEngine, IBurbujaEngine>> _moduleRegistrations = new();
     private EngineConfiguration _configuration = EngineConfiguration.Default(Guid.NewGuid());
     
+    /// <summary>
+    /// Access to the underlying service collection for advanced configuration scenarios.
+    /// This follows the ASP.NET Core pattern where builders expose their service collection.
+    /// </summary>
+    public IServiceCollection Services => _services;
+    
     public EngineBuilder(Guid engineId, IServiceCollection services)
     {
         _engineId = engineId;
@@ -129,38 +135,5 @@ public class EngineBuilder
         });
         
         return _services;
-    }
-}
-
-/// <summary>
-/// Extension methods for easier engine setup.
-/// </summary>
-public static class EngineBuilderExtensions
-{
-    /// <summary>
-    /// Add BurbujaEngine to the service collection.
-    /// </summary>
-    public static EngineBuilder AddBurbujaEngine(this IServiceCollection services, Guid? engineId = null)
-    {
-        if (services == null) throw new ArgumentNullException(nameof(services));
-        var id = engineId ?? Guid.NewGuid();
-        
-        return new EngineBuilder(id, services);
-    }
-    
-    /// <summary>
-    /// Configure and add BurbujaEngine to the service collection.
-    /// </summary>
-    public static IServiceCollection AddBurbujaEngine(
-        this IServiceCollection services,
-        Guid engineId,
-        Action<EngineBuilder> configure)
-    {
-        if (services == null) throw new ArgumentNullException(nameof(services));
-        if (configure == null) throw new ArgumentNullException(nameof(configure));
-        
-        var builder = services.AddBurbujaEngine(engineId);
-        configure(builder);
-        return builder.Build();
     }
 }

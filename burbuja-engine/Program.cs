@@ -16,21 +16,18 @@ builder.Services.AddCors();
 // Register EnvironmentConfig
 builder.Services.AddSingleton<EnvironmentConfig>();
 
-// Add database services
-builder.Services.AddBurbujaEngineDatabase();
-
-// Add BurbujaEngine with configuration only (no modules for now)
-builder.Services.AddBurbujaEngine(Guid.NewGuid(), engine =>
-{
-    engine.WithConfiguration(config =>
+// Add BurbujaEngine with explicit module registration (Industry Standard Pattern)
+builder.Services.AddBurbujaEngine(Guid.NewGuid())
+    .WithConfiguration(config =>
     {
         config.WithVersion("1.0.0")
               .WithModuleTimeout(TimeSpan.FromMinutes(2))
               .WithShutdownTimeout(TimeSpan.FromMinutes(1))
               .ContinueOnModuleFailure(false)
               .EnableParallelInitialization(true);
-    });
-});
+    })
+    .AddDatabaseModule()  // Explicitly add database module with its dependencies
+    .BuildEngine();       // Build the engine with all configured modules
 
 var app = builder.Build();
 

@@ -136,27 +136,25 @@ public class PriorityStressTest
             var services = new ServiceCollection();
             services.AddLogging(builder => builder.AddConsole().SetMinimumLevel(LogLevel.Information));
             
-            // Add engine with all mock modules
-            services.AddBurbujaEngine(Guid.NewGuid(), engine =>
-            {
-                engine.WithConfiguration(config =>
+            // Add engine with all mock modules using new pattern
+            services.AddBurbujaEngine(Guid.NewGuid())
+                .WithConfiguration(config =>
                 {
                     config.WithVersion("1.0.0-test")
                           .WithModuleTimeout(TimeSpan.FromMinutes(1))
                           .WithShutdownTimeout(TimeSpan.FromSeconds(30))
                           .ContinueOnModuleFailure(false)
                           .EnableParallelInitialization(false); // Sequential for order testing
-                });
-                
+                })
                 // Add modules in random order to test priority sorting
-                engine.AddModule<MockAnalyticsModule>();
-                engine.AddModule<MockConfigurationModule>();
-                engine.AddModule<MockEmailServiceModule>();
-                engine.AddModule<MockSecurityModule>();
-                engine.AddModule<MockCacheModule>();
-                engine.AddModule<MockBusinessLogicModule>();
-                engine.AddModule<MockMonitoringModule>();
-            });
+                .AddEngineModule<MockAnalyticsModule>()
+                .AddEngineModule<MockConfigurationModule>()
+                .AddEngineModule<MockEmailServiceModule>()
+                .AddEngineModule<MockSecurityModule>()
+                .AddEngineModule<MockCacheModule>()
+                .AddEngineModule<MockBusinessLogicModule>()
+                .AddEngineModule<MockMonitoringModule>()
+                .BuildEngine();
             
             var serviceProvider = services.BuildServiceProvider();
             var engine = serviceProvider.GetRequiredService<IBurbujaEngine>();

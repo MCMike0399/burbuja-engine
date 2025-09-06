@@ -73,7 +73,7 @@ public static class TestCLI
     
     private static async Task RunSystemTests(string url, bool verbose, string outputFile)
     {
-        Console.WriteLine("🚀 Starting BurbujaEngine System Tests");
+        Console.WriteLine("Starting BurbujaEngine System Tests");
         Console.WriteLine($"Target URL: {url}");
         Console.WriteLine();
         
@@ -101,7 +101,7 @@ public static class TestCLI
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"❌ System test failed: {ex.Message}");
+            Console.WriteLine($"FAILED: System test failed: {ex.Message}");
             if (verbose)
             {
                 Console.WriteLine(ex.ToString());
@@ -112,7 +112,7 @@ public static class TestCLI
     
     private static async Task RunStressTests(bool verbose, string outputFile, int iterations)
     {
-        Console.WriteLine("💪 Starting BurbujaEngine Stress Tests");
+        Console.WriteLine("Starting BurbujaEngine Stress Tests");
         Console.WriteLine($"Iterations: {iterations}");
         Console.WriteLine();
         
@@ -165,7 +165,7 @@ public static class TestCLI
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"❌ Stress test failed: {ex.Message}");
+            Console.WriteLine($"FAILED: Stress test failed: {ex.Message}");
             if (verbose)
             {
                 Console.WriteLine(ex.ToString());
@@ -176,7 +176,7 @@ public static class TestCLI
     
     private static async Task RunAllTests(string url, bool verbose, string outputFile)
     {
-        Console.WriteLine("🔥 Starting ALL BurbujaEngine Tests");
+        Console.WriteLine("Starting ALL BurbujaEngine Tests");
         Console.WriteLine($"Target URL: {url}");
         Console.WriteLine();
         
@@ -197,7 +197,7 @@ public static class TestCLI
             
             if (!systemReport.IsSuccessful)
             {
-                Console.WriteLine("❌ System tests failed. Skipping stress tests.");
+                Console.WriteLine("FAILED: System tests failed. Skipping stress tests.");
                 Environment.Exit(1);
             }
             
@@ -231,17 +231,17 @@ public static class TestCLI
             Console.WriteLine();
             Console.WriteLine("FINAL SUMMARY");
             Console.WriteLine("=".PadRight(50, '='));
-            Console.WriteLine($"System Tests: {(systemReport.IsSuccessful ? "✅ PASS" : "❌ FAIL")}");
-            Console.WriteLine($"Stress Tests: {(stressReport.IsSuccessful ? "✅ PASS" : "❌ FAIL")}");
+            Console.WriteLine($"System Tests: {(systemReport.IsSuccessful ? "PASS" : "FAIL")}");
+            Console.WriteLine($"Stress Tests: {(stressReport.IsSuccessful ? "PASS" : "FAIL")}");
             
             var overallSuccess = systemReport.IsSuccessful && stressReport.IsSuccessful;
-            Console.WriteLine($"Overall: {(overallSuccess ? "✅ PASS" : "❌ FAIL")}");
+            Console.WriteLine($"Overall: {(overallSuccess ? "PASS" : "FAIL")}");
             
             Environment.Exit(overallSuccess ? 0 : 1);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"❌ Test suite failed: {ex.Message}");
+            Console.WriteLine($"FAILED: Test suite failed: {ex.Message}");
             if (verbose)
             {
                 Console.WriteLine(ex.ToString());
@@ -291,7 +291,7 @@ public static class TestCLI
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"⚠️ Warning: Could not save report to file: {ex.Message}");
+            Console.WriteLine($"WARNING: Could not save report to file: {ex.Message}");
         }
     }
     

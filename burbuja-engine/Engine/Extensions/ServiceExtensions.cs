@@ -3,64 +3,163 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using BurbujaEngine.Engine.Core;
 using BurbujaEngine.Engine.Modules;
+using BurbujaEngine.Database.Extensions;
 
 namespace BurbujaEngine.Engine.Extensions;
 
 /// <summary>
 /// Extension methods for integrating BurbujaEngine with ASP.NET Core.
-/// Provides seamless integration following .NET conventions.
+/// Provides seamless integration following .NET conventions and industry standards.
 /// </summary>
 public static class EngineServiceExtensions
 {
     /// <summary>
-    /// Add BurbujaEngine with common modules to the service collection.
+    /// Add BurbujaEngine to the service collection without any modules.
+    /// This is the core engine registration that follows ASP.NET Core patterns.
+    /// Modules should be added explicitly using AddEngineModule<T>() methods.
     /// </summary>
-    public static IServiceCollection AddBurbujaEngine(
+    public static EngineBuilder AddBurbujaEngine(
         this IServiceCollection services,
-        Guid? engineId = null,
-        Action<EngineBuilder>? configure = null)
+        Guid? engineId = null)
     {
         if (services == null) throw new ArgumentNullException(nameof(services));
         
         var id = engineId ?? Guid.NewGuid();
         var builder = new EngineBuilder(id, services);
         
-        // Add common modules by default
-        builder.AddModule<DatabaseModule>();
-        
-        // Allow custom configuration
-        configure?.Invoke(builder);
-        
         // Register hosted service for engine lifecycle management
         services.AddHostedService<EngineHostedService>();
         
-        return builder.Build();
+        return builder;
     }
     
     /// <summary>
-    /// Add BurbujaEngine with custom configuration.
+    /// Add BurbujaEngine with configuration but no modules.
+    /// This method sets up the engine configuration while keeping module registration explicit.
     /// </summary>
-    public static IServiceCollection AddBurbujaEngine(
+    public static EngineBuilder AddBurbujaEngine(
         this IServiceCollection services,
-        Action<EngineConfigurationBuilder> configureEngine,
-        Action<EngineBuilder>? configureModules = null)
+        Guid engineId,
+        Action<EngineConfigurationBuilder> configureEngine)
     {
         if (services == null) throw new ArgumentNullException(nameof(services));
         if (configureEngine == null) throw new ArgumentNullException(nameof(configureEngine));
         
-        var builder = new EngineBuilder(Guid.NewGuid(), services)
+        var builder = new EngineBuilder(engineId, services)
             .WithConfiguration(configureEngine);
         
-        // Add common modules
-        builder.AddModule<DatabaseModule>();
-        
-        // Allow custom module configuration
-        configureModules?.Invoke(builder);
-        
-        // Register hosted service
+        // Register hosted service for engine lifecycle management
         services.AddHostedService<EngineHostedService>();
         
+        return builder;
+    }
+    
+    /// <summary>
+    /// DEPRECATED: Use AddBurbujaEngine().AddDatabaseModule().BuildEngine() pattern instead.
+    /// This method is kept for backward compatibility.
+    /// </summary>
+    [Obsolete("Use the fluent builder pattern: services.AddBurbujaEngine().AddDatabaseModule().BuildEngine()")]
+    public static EngineBuilder AddBurbujaEngine(
+        this IServiceCollection services,
+        Guid engineId,
+        Action<EngineBuilder> configure)
+    {
+        if (services == null) throw new ArgumentNullException(nameof(services));
+        if (configure == null) throw new ArgumentNullException(nameof(configure));
+        
+        var builder = new EngineBuilder(engineId, services);
+        configure(builder);
+        
+        // Register hosted service for engine lifecycle management
+        services.AddHostedService<EngineHostedService>();
+        
+        return builder;
+    }
+    
+    /// <summary>
+    /// Add a specific engine module to the engine builder.
+    /// This follows the explicit registration pattern used throughout ASP.NET Core.
+    /// </summary>
+    public static EngineBuilder AddEngineModule<TModule>(this EngineBuilder builder)
+        where TModule : class, IEngineModule
+    {
+        if (builder == null) throw new ArgumentNullException(nameof(builder));
+        
+        return builder.AddModule<TModule>();
+    }
+    
+    /// <summary>
+    /// Add a specific engine module with a factory to the engine builder.
+    /// Useful for modules that require custom initialization logic.
+    /// </summary>
+    public static EngineBuilder AddEngineModule<TModule>(this EngineBuilder builder, Func<IServiceProvider, TModule> factory)
+        where TModule : class, IEngineModule
+    {
+        if (builder == null) throw new ArgumentNullException(nameof(builder));
+        if (factory == null) throw new ArgumentNullException(nameof(factory));
+        
+        return builder.AddModule(factory);
+    }
+    
+    /// <summary>
+    /// Add a specific engine module instance to the engine builder.
+    /// Use this when you need to configure the module before registration.
+    /// </summary>
+    public static EngineBuilder AddEngineModule(this EngineBuilder builder, IEngineModule module)
+    {
+        if (builder == null) throw new ArgumentNullException(nameof(builder));
+        if (module == null) throw new ArgumentNullException(nameof(module));
+        
+        return builder.AddModule(module);
+    }
+    
+    /// <summary>
+    /// Build and register the engine with all configured modules.
+    /// Call this after configuring all modules and engine settings.
+    /// </summary>
+    public static IServiceCollection BuildEngine(this EngineBuilder builder)
+    {
+        if (builder == null) throw new ArgumentNullException(nameof(builder));
+        
         return builder.Build();
+    }
+}
+
+/// <summary>
+/// Extension methods for adding specific engine modules.
+/// These follow the ASP.NET Core pattern of Add{Service} methods.
+/// </summary>
+public static class EngineModuleExtensions
+{
+    /// <summary>
+    /// Add the Database module to the engine with all required database services.
+    /// This method ensures that database services are registered before the module is added.
+    /// </summary>
+    public static EngineBuilder AddDatabaseModule(this EngineBuilder builder)
+    {
+        if (builder == null) throw new ArgumentNullException(nameof(builder));
+        
+        // Register database services first (this ensures dependencies are available)
+        builder.Services.AddBurbujaEngineDatabase();
+        
+        // Then register the database module
+        return builder.AddEngineModule<DatabaseModule>();
+    }
+    
+    /// <summary>
+    /// Add the Database module with custom database configuration.
+    /// This allows for custom database setup while maintaining the proper registration order.
+    /// </summary>
+    public static EngineBuilder AddDatabaseModule(this EngineBuilder builder, Action<IServiceCollection> configureDatabaseServices)
+    {
+        if (builder == null) throw new ArgumentNullException(nameof(builder));
+        if (configureDatabaseServices == null) throw new ArgumentNullException(nameof(configureDatabaseServices));
+        
+        // Apply custom database configuration
+        configureDatabaseServices(builder.Services);
+        
+        // Register the database module
+        return builder.AddEngineModule<DatabaseModule>();
     }
 }
 
