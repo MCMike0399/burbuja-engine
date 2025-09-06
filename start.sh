@@ -496,6 +496,49 @@ build_services() {
     fi
 }
 
+# ===== CHECK IF MONGODB IS ALREADY RUNNING =====
+check_mongodb_status() {
+    local compose_cmd="$(get_compose_command)"
+    
+    # Check if MongoDB container exists and is running
+    local mongodb_status=""
+    
+    # Try with jq first, fallback to grep if jq is not available
+    if command -v jq >/dev/null 2>&1; then
+        mongodb_status=$($compose_cmd ps mongodb --format "json" 2>/dev/null | jq -r '.[0].State // empty' 2>/dev/null || echo "")
+    else
+        # Fallback: use table format and parse with awk
+        mongodb_status=$($compose_cmd ps mongodb --format "table {{.State}}" 2>/dev/null | tail -n +2 | awk '{print $1}' || echo "")
+        # Convert table format to match jq output
+        case "$mongodb_status" in
+            "Up"*) mongodb_status="running" ;;
+            "Exit"*) mongodb_status="exited" ;;
+            "Created") mongodb_status="created" ;;
+            *) mongodb_status="" ;;
+        esac
+    fi
+    
+    if [[ "$mongodb_status" == "running" ]]; then
+        log_info "🗄️ MongoDB container is already running"
+        
+        # Quick connection test
+        if $compose_cmd exec -T mongodb mongosh --eval "db.adminCommand('ping')" &>/dev/null; then
+            log_success "MongoDB is already running and responsive"
+            return 0  # Already running and healthy
+        else
+            log_warning "MongoDB container running but not responsive, restarting..."
+            $compose_cmd restart mongodb
+            return 2  # Restarted, need to wait
+        fi
+    elif [[ "$mongodb_status" == "exited" ]] || [[ "$mongodb_status" == "created" ]]; then
+        log_info "🗄️ MongoDB container exists but is stopped, starting..."
+        return 1  # Exists but stopped
+    else
+        log_info "🗄️ MongoDB container doesn't exist, creating and starting..."
+        return 1  # Doesn't exist
+    fi
+}
+
 # ===== START SERVICES =====
 start_services() {
     log_step "Starting services..."
@@ -503,12 +546,23 @@ start_services() {
     local compose_cmd="$(get_compose_command)"
     
     if [[ "$ONLY_DATABASE" == "true" ]]; then
-        log_info "🗄️ Starting MongoDB container only for local C# development"
-        if $compose_cmd up -d mongodb; then
-            log_success "MongoDB container started successfully"
+        # Check if MongoDB is already running first
+        local mongodb_check_result=0
+        check_mongodb_status || mongodb_check_result=$?
+        
+        if [[ $mongodb_check_result -eq 0 ]]; then
+            log_success "MongoDB is already running and ready"
+            return 0
+        elif [[ $mongodb_check_result -eq 2 ]]; then
+            log_info "MongoDB was restarted, will wait for it to be ready"
         else
-            log_error "Error starting MongoDB"
-            return 1
+            log_info "🗄️ Starting MongoDB container for local C# development"
+            if $compose_cmd up -d mongodb; then
+                log_success "MongoDB container started successfully"
+            else
+                log_error "Error starting MongoDB"
+                return 1
+            fi
         fi
     elif [[ "$PROD_MODE" == "true" ]]; then
         log_error "🚧 Production mode is not yet implemented"
@@ -534,38 +588,71 @@ wait_for_services() {
     local app_port=8000
     local dot_count=0
     local error_logged=false
+    local max_wait_time=30  # Reduced from 60 seconds for dev mode
+    local check_interval=1   # Reduced from 2 seconds for faster checks
     
     # In database-only mode, we only check the database
     if [[ "$ONLY_DATABASE" == "true" ]]; then
         log_info "🗄️ Database-only mode: Checking MongoDB container..."
         
-        while [[ $elapsed -lt $MAX_WAIT_TIME ]]; do
-            # Check Database (MongoDB)
+        # First, do a quick container status check
+        local compose_cmd="$(get_compose_command)"
+        local mongodb_status=""
+        
+        # Try with jq first, fallback to grep if jq is not available
+        if command -v jq >/dev/null 2>&1; then
+            mongodb_status=$($compose_cmd ps mongodb --format "json" 2>/dev/null | jq -r '.[0].State // empty' 2>/dev/null || echo "")
+        else
+            # Fallback: use table format and parse
+            mongodb_status=$($compose_cmd ps mongodb --format "table {{.State}}" 2>/dev/null | tail -n +2 | awk '{print $1}' || echo "")
+            # Convert to consistent format
+            case "$mongodb_status" in
+                "Up"*) mongodb_status="running" ;;
+                *) mongodb_status="not_running" ;;
+            esac
+        fi
+        
+        if [[ "$mongodb_status" != "running" ]]; then
+            log_error "MongoDB container is not running"
+            return 1
+        fi
+        
+        # Quick initial check - if it responds immediately, we're done
+        if $compose_cmd exec -T mongodb mongosh --eval "db.adminCommand('ping')" &>/dev/null; then
+            log_success "MongoDB is immediately ready and responsive"
+            return 0
+        fi
+        
+        log_info "MongoDB container is running, waiting for it to accept connections..."
+        
+        while [[ $elapsed -lt $max_wait_time ]]; do
+            # Check Database (MongoDB) with timeout
             if ! $db_ready; then
-                if $DOCKER_COMPOSE exec -T mongodb mongosh --eval "db.adminCommand('ping')" &>/dev/null; then
+                if timeout 3 $compose_cmd exec -T mongodb mongosh --eval "db.adminCommand('ping')" &>/dev/null; then
                     echo # New line after dots
-                    log_success "MongoDB is ready and responsive"
+                    log_success "MongoDB is ready and responsive (took ${elapsed}s)"
                     db_ready=true
                     return 0
                 fi
             fi
             
-            # Print progress dots
-            if [[ $dot_count -lt 30 ]]; then
+            # Print progress dots every 3 checks (3 seconds)
+            if [[ $((elapsed % 3)) -eq 0 ]] && [[ $dot_count -lt 20 ]]; then
                 echo -n "."
                 ((dot_count++))
-            else
-                echo # New line every 30 dots
-                log_info "Still waiting for MongoDB... (${elapsed}s/${MAX_WAIT_TIME}s)"
+            elif [[ $dot_count -ge 20 ]]; then
+                echo # New line every 20 dots
+                log_info "Still waiting for MongoDB... (${elapsed}s/${max_wait_time}s)"
                 dot_count=0
             fi
             
-            sleep $HEALTH_CHECK_INTERVAL
-            elapsed=$((elapsed + HEALTH_CHECK_INTERVAL))
+            sleep $check_interval
+            elapsed=$((elapsed + check_interval))
         done
         
         echo # New line after dots
-        log_warning "MongoDB did not respond within expected time (${MAX_WAIT_TIME}s)"
+        log_warning "MongoDB did not respond within expected time (${max_wait_time}s)"
+        log_info "This might be normal for first startup. MongoDB may still be initializing..."
         return 1
     fi
     
@@ -757,28 +844,57 @@ monitor_app_startup() {
     if [[ "$ONLY_DATABASE" == "true" ]]; then
         log_info "🗄️ Monitoring MongoDB container startup..."
         
-        # Give initial time for MongoDB to initialize
-        sleep 5
+        local compose_cmd="$(get_compose_command)"
         
-        # Check that MongoDB container is running
-        local mongodb_status=$($DOCKER_COMPOSE ps mongodb --format "table {{.Status}}" 2>/dev/null | tail -n +2)
+        # Quick status check first
+        local mongodb_status=""
+        
+        # Try with jq first, fallback if jq is not available
+        if command -v jq >/dev/null 2>&1; then
+            mongodb_status=$($compose_cmd ps mongodb --format "json" 2>/dev/null | jq -r '.[0].State // empty' 2>/dev/null || echo "")
+        else
+            # Fallback: use table format and parse
+            mongodb_status=$($compose_cmd ps mongodb --format "table {{.State}}" 2>/dev/null | tail -n +2 | awk '{print $1}' || echo "")
+            # Convert to consistent format
+            case "$mongodb_status" in
+                "Up"*) mongodb_status="running" ;;
+                *) mongodb_status="not_running" ;;
+            esac
+        fi
         
         if [[ -z "$mongodb_status" ]]; then
             log_error "MongoDB container not found"
             return 1
         fi
         
-        if [[ "$mongodb_status" == *"Up"* ]]; then
+        if [[ "$mongodb_status" == "running" ]]; then
             log_success "MongoDB container is running"
             
-            # Wait for MongoDB to be ready to accept connections
-            if wait_for_services; then
-                log_success "MongoDB is ready for connections"
+            # Quick immediate check first
+            if $compose_cmd exec -T mongodb mongosh --eval "db.adminCommand('ping')" &>/dev/null; then
+                log_success "MongoDB is immediately ready for connections"
                 return 0
-            else
-                log_warning "MongoDB container is running but not responding to connections"
-                return 1
             fi
+            
+            # If not immediately ready, give it a short wait
+            log_info "MongoDB starting up, checking readiness..."
+            local wait_count=0
+            local max_quick_checks=10  # 10 seconds max for quick startup
+            
+            while [[ $wait_count -lt $max_quick_checks ]]; do
+                sleep 1
+                if timeout 2 $compose_cmd exec -T mongodb mongosh --eval "db.adminCommand('ping')" &>/dev/null; then
+                    log_success "MongoDB is ready for connections (took ${wait_count}s)"
+                    return 0
+                fi
+                ((wait_count++))
+                echo -n "."
+            done
+            
+            echo # New line after dots
+            log_warning "MongoDB container is running but not yet responding to connections"
+            log_info "This is normal for first startup. MongoDB is likely still initializing..."
+            return 1
         else
             log_error "MongoDB container is not running: $mongodb_status"
             return 1
@@ -887,30 +1003,39 @@ main() {
     if [[ "$DEV_MODE" == "true" ]]; then
         log_info "🚀 Starting in development mode: MongoDB container + local dotnet with hot reload"
         
-        # Start only MongoDB
+        # Start only MongoDB (with optimized checking)
         if ! start_services; then
             handle_error 1 "database startup"
         fi
         
-        # Monitor MongoDB startup
-        if ! monitor_app_startup; then
-            log_warning "MongoDB container setup completed with warnings"
-        fi
+        # Quick MongoDB readiness check
+        log_step "Checking MongoDB readiness..."
+        local mongodb_ready=false
         
-        # Quick health check for MongoDB
-        set +e  # Disable error trap for health checks
-        log_step "Performing MongoDB health check..."
-        sleep 3  # Give MongoDB a moment
-        
-        if verify_services_health; then
-            test_database_connection
-            log_success "✅ MongoDB container is ready!"
+        # Try immediate connection first
+        local compose_cmd="$(get_compose_command)"
+        if $compose_cmd exec -T mongodb mongosh --eval "db.adminCommand('ping')" &>/dev/null; then
+            log_success "✅ MongoDB is immediately ready!"
+            mongodb_ready=true
         else
-            log_info "🗄️ MongoDB container is starting up..."
-            log_info "💡 Continuing with dotnet startup..."
+            # Quick startup monitoring
+            if monitor_app_startup; then
+                mongodb_ready=true
+            else
+                log_info "🗄️ MongoDB is starting up in the background..."
+                log_info "💡 Continuing with dotnet startup - connection will be retried automatically"
+            fi
         fi
         
-        set -e  # Re-enable error handling
+        # Quick health check only if MongoDB seems ready
+        if [[ "$mongodb_ready" == "true" ]]; then
+            set +e  # Disable error trap for health checks
+            if verify_services_health; then
+                test_database_connection
+                log_success "✅ MongoDB container is fully ready!"
+            fi
+            set -e  # Re-enable error handling
+        fi
         
         # Run dotnet locally with hot reload
         run_dotnet_dev
