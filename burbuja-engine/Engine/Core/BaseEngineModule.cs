@@ -112,69 +112,6 @@ public abstract class BaseEngineModule : IEngineModule, IModulePriorityModule, I
         }
     }
     
-    /// <summary>
-    /// Helper method to create priority configuration with sub-priority.
-    /// </summary>
-    [Obsolete("Use ModulePriority.Create() builder pattern instead.")]
-    protected static LegacyModulePriority CreatePriorityConfig(PriorityLevel priority, int subPriority = 0)
-    {
-#pragma warning disable CS0618 // Type or member is obsolete
-        return (LegacyModulePriority)(int)priority;
-#pragma warning restore CS0618 // Type or member is obsolete
-    }
-    
-    /// <summary>
-    /// Helper method to create priority configuration with context adjustments.
-    /// </summary>
-    [Obsolete("Use ModulePriority.Create() builder pattern instead.")]
-    protected static ModulePriorityConfig CreateContextualPriorityConfig(
-        PriorityLevel priority, 
-        Dictionary<string, int> contextAdjustments)
-    {
-#pragma warning disable CS0618 // Type or member is obsolete
-        return ModulePriorityConfig.WithContext((LegacyModulePriority)(int)priority, contextAdjustments);
-#pragma warning restore CS0618 // Type or member is obsolete
-    }
-    
-    /// <summary>
-    /// Helper method to create a comprehensive priority configuration.
-    /// </summary>
-    [Obsolete("Use ModulePriority.Create() builder pattern instead.")]
-    protected static ModulePriorityConfig CreateAdvancedPriorityConfig(
-        PriorityLevel priority,
-        int subPriority = 0,
-        bool canParallelInitialize = true,
-        Dictionary<string, int>? contextAdjustments = null,
-        HashSet<string>? tags = null)
-    {
-#pragma warning disable CS0618 // Type or member is obsolete
-        return new ModulePriorityConfig
-        {
-            BasePriority = (LegacyModulePriority)(int)priority,
-            SubPriority = subPriority,
-            CanParallelInitialize = canParallelInitialize,
-            ContextAdjustments = contextAdjustments ?? new(),
-            Tags = tags ?? new()
-        };
-#pragma warning restore CS0618 // Type or member is obsolete
-    }
-    
-    /// <summary>
-    /// Create a priority configuration using the builder pattern.
-    /// </summary>
-    protected static ModulePriority CreateModulePriority(PriorityLevel priority)
-    {
-        return ModulePriority.Create(priority).Build();
-    }
-    
-    /// <summary>
-    /// Create a priority with sub-priority.
-    /// </summary>
-    protected static ModulePriority CreateModulePriorityWithSub(PriorityLevel priority, int subPriority)
-    {
-        return ModulePriority.Create(priority).WithSubPriority(subPriority).Build();
-    }
-    
     public ModuleState State
     {
         get

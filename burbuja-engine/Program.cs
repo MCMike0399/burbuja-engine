@@ -1,5 +1,4 @@
 using BurbujaEngine.Configuration;
-using BurbujaEngine.Database.Extensions;
 using BurbujaEngine.Engine.Extensions;
 using BurbujaEngine.Engine.Core;
 
@@ -16,7 +15,7 @@ builder.Services.AddCors();
 // Register EnvironmentConfig
 builder.Services.AddSingleton<EnvironmentConfig>();
 
-// Add BurbujaEngine with explicit module registration (Industry Standard Pattern)
+// Add BurbujaEngine with module registration 
 builder.Services.AddBurbujaEngine(Guid.NewGuid())
     .WithConfiguration(config =>
     {
@@ -26,7 +25,7 @@ builder.Services.AddBurbujaEngine(Guid.NewGuid())
               .ContinueOnModuleFailure(false)
               .EnableParallelInitialization(true);
     })
-    .AddDatabaseModule()  // Explicitly add database module with its dependencies
+    .AddDatabaseModule()  
     .BuildEngine();       // Build the engine with all configured modules
 
 var app = builder.Build();
