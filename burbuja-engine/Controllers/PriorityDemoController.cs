@@ -42,6 +42,7 @@ public class PriorityDemoController : ControllerBase
             var moduleInfo = modules.Select(m => new
             {
                 module_id = m.ModuleId,
+                friendly_id = m.FriendlyId,
                 module_name = m.ModuleName,
                 version = m.Version,
                 state = m.State.ToString(),
@@ -78,12 +79,13 @@ public class PriorityDemoController : ControllerBase
                 .Select(m => new
                 {
                     module_id = m.ModuleId,
+                    friendly_id = m.FriendlyId,
                     module_name = m.ModuleName,
                     base_priority = m.ModulePriority.Level.ToString(),
                     base_value = m.ModulePriority.Level.ToNumericValue(),
                     sub_priority = m.ModulePriority.SubPriority,
                     effective_priority = m.ModulePriority.GetEffectivePriority(context),
-                    context_adjustment = m.ModulePriority.ContextAdjustments.GetValueOrDefault(context, 0),
+                    context_adjustment = m.ModulePriority.ContextAdjustments.GetValueOrDefault(context ?? "", 0),
                     can_parallel = m.ModulePriority.CanParallelInitialize,
                     weight = m.ModulePriority.Weight,
                     tags = m.ModulePriority.Tags,

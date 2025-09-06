@@ -98,8 +98,8 @@ public class BurbujaEngine : IBurbujaEngine, IDisposable
         // Subscribe to module state changes
         module.StateChanged += OnModuleStateChanged;
         
-        _logger.LogInformation("[{EngineId}] Registered module '{ModuleName}' (ID: {ModuleId})", 
-            EngineId, module.ModuleName, module.ModuleId);
+        _logger.LogInformation("[{EngineId}] Registered module '{FriendlyId}' (ID: {ModuleId})", 
+            EngineId, module.FriendlyId, module.ModuleId);
         
         return this;
     }
@@ -166,7 +166,7 @@ public class BurbujaEngine : IBurbujaEngine, IDisposable
             // Resolve dependency order
             var orderedModules = ResolveDependencyOrder();
             _logger.LogDebug("[{EngineId}] Module initialization order: {ModuleOrder}", 
-                EngineId, string.Join(" -> ", orderedModules.Select(m => m.ModuleName)));
+                EngineId, string.Join(" -> ", orderedModules.Select(m => m.FriendlyId)));
             
             var results = new Dictionary<Guid, ModuleResult>();
             
@@ -245,7 +245,7 @@ public class BurbujaEngine : IBurbujaEngine, IDisposable
                     if (!moduleResult.Success && !_configuration.ContinueOnModuleFailure)
                     {
                         State = EngineState.Error;
-                        return EngineResult.Failed($"Failed to start module {module.ModuleName}: {moduleResult.Message}", 
+                        return EngineResult.Failed($"Failed to start module {module.FriendlyId}: {moduleResult.Message}", 
                             duration: stopwatch.Elapsed).WithModuleResults(results);
                     }
                 }
@@ -474,8 +474,8 @@ public class BurbujaEngine : IBurbujaEngine, IDisposable
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "[{EngineId}] Failed to configure services for module {ModuleName}: {Message}", 
-                    EngineId, module.ModuleName, ex.Message);
+                _logger.LogWarning(ex, "[{EngineId}] Failed to configure services for module {FriendlyId}: {Message}", 
+                    EngineId, module.FriendlyId, ex.Message);
             }
         }
     }
@@ -609,7 +609,7 @@ public class BurbujaEngine : IBurbujaEngine, IDisposable
         
         _logger.LogDebug("[{EngineId}] Module priority order (context: {Context}): {ModuleOrder}", 
             EngineId, context ?? "default", 
-            string.Join(" -> ", modulesByPriority.Select(m => $"{m.ModuleName}({GetModulePriorityInfo(m, context)})")));
+            string.Join(" -> ", modulesByPriority.Select(m => $"{m.FriendlyId}({GetModulePriorityInfo(m, context)})")));
         
         foreach (var module in modulesByPriority)
         {
@@ -710,8 +710,8 @@ public class BurbujaEngine : IBurbujaEngine, IDisposable
     
     private void OnModuleStateChanged(object? sender, ModuleStateChangedEventArgs e)
     {
-        _logger.LogDebug("[{EngineId}] Module {ModuleName} state changed: {PreviousState} -> {NewState}", 
-            EngineId, e.ModuleName, e.PreviousState, e.NewState);
+        _logger.LogDebug("[{EngineId}] Module {FriendlyId} state changed: {PreviousState} -> {NewState}", 
+            EngineId, ((IEngineModule)sender!).FriendlyId, e.PreviousState, e.NewState);
         
         ModuleStateChanged?.Invoke(this, e);
     }

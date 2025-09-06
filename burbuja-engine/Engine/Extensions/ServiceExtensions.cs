@@ -113,14 +113,17 @@ public class EngineHostedService : IHostedService
             // Log module status
             foreach (var moduleResult in startResult.ModuleResults)
             {
+                var module = _engine.GetModule(moduleResult.Key);
+                var moduleIdentifier = module?.FriendlyId ?? moduleResult.Key.ToString();
+                
                 if (moduleResult.Value.Success)
                 {
-                    _logger.LogDebug("Module {ModuleId} started successfully", moduleResult.Key);
+                    _logger.LogDebug("Module {ModuleIdentifier} started successfully", moduleIdentifier);
                 }
                 else
                 {
-                    _logger.LogWarning("Module {ModuleId} failed to start: {Message}", 
-                        moduleResult.Key, moduleResult.Value.Message);
+                    _logger.LogWarning("Module {ModuleIdentifier} failed to start: {Message}", 
+                        moduleIdentifier, moduleResult.Value.Message);
                 }
             }
         }
@@ -154,14 +157,17 @@ public class EngineHostedService : IHostedService
             // Log module shutdown status
             foreach (var moduleResult in shutdownResult.ModuleResults)
             {
+                var module = _engine.GetModule(moduleResult.Key);
+                var moduleIdentifier = module?.FriendlyId ?? moduleResult.Key.ToString();
+                
                 if (moduleResult.Value.Success)
                 {
-                    _logger.LogDebug("Module {ModuleId} shut down successfully", moduleResult.Key);
+                    _logger.LogDebug("Module {ModuleIdentifier} shut down successfully", moduleIdentifier);
                 }
                 else
                 {
-                    _logger.LogWarning("Module {ModuleId} shutdown failed: {Message}", 
-                        moduleResult.Key, moduleResult.Value.Message);
+                    _logger.LogWarning("Module {ModuleIdentifier} shutdown failed: {Message}", 
+                        moduleIdentifier, moduleResult.Value.Message);
                 }
             }
         }
@@ -273,6 +279,7 @@ public static class WebApplicationExtensions
                         kvp => new
                         {
                             module_id = kvp.Value.ModuleId,
+                            friendly_id = engine.GetModule(kvp.Value.ModuleId)?.FriendlyId ?? kvp.Value.ModuleId.ToString(),
                             module_name = kvp.Value.ModuleName,
                             version = kvp.Value.Version,
                             state = kvp.Value.State.ToString().ToLowerInvariant(),

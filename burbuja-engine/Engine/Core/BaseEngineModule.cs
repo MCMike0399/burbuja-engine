@@ -28,9 +28,14 @@ public abstract class BaseEngineModule : IEngineModule, IModulePriorityModule, I
     public virtual IReadOnlyList<Guid> Dependencies => Array.Empty<Guid>();
     
     /// <summary>
-    /// Module ID with automatic generation based on module name if not overridden.
+    /// Module ID with automatic generation. Each module instance gets a unique identifier.
     /// </summary>
-    public virtual Guid ModuleId => GenerateModuleId(ModuleName);
+    public virtual Guid ModuleId { get; } = Guid.NewGuid();
+    
+    /// <summary>
+    /// Friendly identifier for debugging purposes. Combines module name with short ID.
+    /// </summary>
+    public string FriendlyId => $"{ModuleName}_{ModuleId.ToString("N")[..8]}";
     
     /// <summary>
     /// Priority configuration for this module.
@@ -58,32 +63,6 @@ public abstract class BaseEngineModule : IEngineModule, IModulePriorityModule, I
     /// Override GetDefaultPriority() to customize this for derived classes.
     /// </summary>
     public virtual PriorityLevel ModulePriorityLevel => ModulePriority.Level;
-    
-    /// <summary>
-    /// Generate a consistent Module ID based on the module name.
-    /// This ensures modules have stable IDs without hardcoding GUIDs.
-    /// For multiple instances, includes a unique suffix.
-    /// </summary>
-    protected virtual Guid GenerateModuleId(string moduleName)
-    {
-        // Create a unique suffix based on creation time and random data for multiple instances
-        var uniqueSuffix = $"{DateTime.UtcNow.Ticks}.{Environment.CurrentManagedThreadId}.{Random.Shared.Next()}";
-        var uniqueModuleName = $"BurbujaEngine.Module.{moduleName}.{uniqueSuffix}";
-        
-        // Use a deterministic approach to generate GUID from module name
-        using var sha1 = System.Security.Cryptography.SHA1.Create();
-        var hash = sha1.ComputeHash(System.Text.Encoding.UTF8.GetBytes(uniqueModuleName));
-        
-        // Take first 16 bytes and create a GUID
-        var guidBytes = new byte[16];
-        Array.Copy(hash, guidBytes, 16);
-        
-        // Set version (4) and variant bits for a valid GUID
-        guidBytes[6] = (byte)((guidBytes[6] & 0x0F) | 0x40); // Version 4
-        guidBytes[8] = (byte)((guidBytes[8] & 0x3F) | 0x80); // Variant bits
-        
-        return new Guid(guidBytes);
-    }
     
     /// <summary>
     /// Configure the priority for this module.
@@ -243,7 +222,7 @@ public abstract class BaseEngineModule : IEngineModule, IModulePriorityModule, I
             Logger = context.LoggerFactory.CreateLogger(GetType());
             ModuleCancellationTokenSource = new CancellationTokenSource();
             
-            LogInfo($"Initializing module {ModuleName} (ID: {ModuleId})");
+            LogInfo($"Initializing module {FriendlyId}");
             
             // Call template method for specific initialization
             await OnInitializeAsync(cancellationToken);
@@ -251,14 +230,14 @@ public abstract class BaseEngineModule : IEngineModule, IModulePriorityModule, I
             InitializedAt = DateTime.UtcNow;
             State = ModuleState.Initialized;
             
-            LogInfo($"Module {ModuleName} initialized successfully in {stopwatch.Elapsed.TotalMilliseconds:F2}ms");
+            LogInfo($"Module {FriendlyId} initialized successfully in {stopwatch.Elapsed.TotalMilliseconds:F2}ms");
             
             return ModuleResult.Successful($"Module {ModuleName} initialized", stopwatch.Elapsed);
         }
         catch (Exception ex)
         {
             State = ModuleState.Error;
-            LogError($"Failed to initialize module {ModuleName}: {ex.Message}", ex);
+            LogError($"Failed to initialize module {FriendlyId}: {ex.Message}", ex);
             return ModuleResult.Failed(ex, stopwatch.Elapsed);
         }
     }
@@ -278,7 +257,7 @@ public abstract class BaseEngineModule : IEngineModule, IModulePriorityModule, I
         
         try
         {
-            LogInfo($"Starting module {ModuleName}");
+            LogInfo($"Starting module {FriendlyId}");
             
             // Call template method for specific startup logic
             await OnStartAsync(cancellationToken);
@@ -286,14 +265,14 @@ public abstract class BaseEngineModule : IEngineModule, IModulePriorityModule, I
             StartedAt = DateTime.UtcNow;
             State = ModuleState.Running;
             
-            LogInfo($"Module {ModuleName} started successfully in {stopwatch.Elapsed.TotalMilliseconds:F2}ms");
+            LogInfo($"Module {FriendlyId} started successfully in {stopwatch.Elapsed.TotalMilliseconds:F2}ms");
             
             return ModuleResult.Successful($"Module {ModuleName} started", stopwatch.Elapsed);
         }
         catch (Exception ex)
         {
             State = ModuleState.Error;
-            LogError($"Failed to start module {ModuleName}: {ex.Message}", ex);
+            LogError($"Failed to start module {FriendlyId}: {ex.Message}", ex);
             return ModuleResult.Failed(ex, stopwatch.Elapsed);
         }
     }
@@ -313,7 +292,7 @@ public abstract class BaseEngineModule : IEngineModule, IModulePriorityModule, I
         
         try
         {
-            LogInfo($"Stopping module {ModuleName}");
+            LogInfo($"Stopping module {FriendlyId}");
             
             // Cancel module operations
             ModuleCancellationTokenSource?.Cancel();
@@ -323,14 +302,14 @@ public abstract class BaseEngineModule : IEngineModule, IModulePriorityModule, I
             
             State = ModuleState.Stopped;
             
-            LogInfo($"Module {ModuleName} stopped successfully in {stopwatch.Elapsed.TotalMilliseconds:F2}ms");
+            LogInfo($"Module {FriendlyId} stopped successfully in {stopwatch.Elapsed.TotalMilliseconds:F2}ms");
             
             return ModuleResult.Successful($"Module {ModuleName} stopped", stopwatch.Elapsed);
         }
         catch (Exception ex)
         {
             State = ModuleState.Error;
-            LogError($"Failed to stop module {ModuleName}: {ex.Message}", ex);
+            LogError($"Failed to stop module {FriendlyId}: {ex.Message}", ex);
             return ModuleResult.Failed(ex, stopwatch.Elapsed);
         }
     }
@@ -350,7 +329,7 @@ public abstract class BaseEngineModule : IEngineModule, IModulePriorityModule, I
         
         try
         {
-            LogInfo($"Shutting down module {ModuleName}");
+            LogInfo($"Shutting down module {FriendlyId}");
             
             // Stop first if running
             if (State == ModuleState.Running)
@@ -363,14 +342,14 @@ public abstract class BaseEngineModule : IEngineModule, IModulePriorityModule, I
             
             State = ModuleState.Shutdown;
             
-            LogInfo($"Module {ModuleName} shut down successfully in {stopwatch.Elapsed.TotalMilliseconds:F2}ms");
+            LogInfo($"Module {FriendlyId} shut down successfully in {stopwatch.Elapsed.TotalMilliseconds:F2}ms");
             
             return ModuleResult.Successful($"Module {ModuleName} shut down", stopwatch.Elapsed);
         }
         catch (Exception ex)
         {
             State = ModuleState.Error;
-            LogError($"Failed to shut down module {ModuleName}: {ex.Message}", ex);
+            LogError($"Failed to shut down module {FriendlyId}: {ex.Message}", ex);
             return ModuleResult.Failed(ex, stopwatch.Elapsed);
         }
     }
@@ -391,7 +370,7 @@ public abstract class BaseEngineModule : IEngineModule, IModulePriorityModule, I
         }
         catch (Exception ex)
         {
-            LogError($"Health check failed for module {ModuleName}: {ex.Message}", ex);
+            LogError($"Health check failed for module {FriendlyId}: {ex.Message}", ex);
             return ModuleHealth.Unhealthy(ModuleId, ModuleName, $"Health check failed: {ex.Message}");
         }
     }
@@ -426,7 +405,7 @@ public abstract class BaseEngineModule : IEngineModule, IModulePriorityModule, I
         }
         catch (Exception ex)
         {
-            LogError($"Failed to get diagnostics for module {ModuleName}: {ex.Message}", ex);
+            LogError($"Failed to get diagnostics for module {FriendlyId}: {ex.Message}", ex);
             throw;
         }
     }
@@ -537,7 +516,7 @@ public abstract class BaseEngineModule : IEngineModule, IModulePriorityModule, I
     /// </summary>
     protected void LogInfo(string message)
     {
-        Logger?.LogInformation("[{ModuleName}] {Message}", ModuleName, message);
+        Logger?.LogInformation("[{FriendlyId}] {Message}", FriendlyId, message);
         AddLogEntry("Information", message);
     }
     
@@ -546,7 +525,7 @@ public abstract class BaseEngineModule : IEngineModule, IModulePriorityModule, I
     /// </summary>
     protected void LogWarning(string message)
     {
-        Logger?.LogWarning("[{ModuleName}] {Message}", ModuleName, message);
+        Logger?.LogWarning("[{FriendlyId}] {Message}", FriendlyId, message);
         AddLogEntry("Warning", message);
     }
     
@@ -555,7 +534,7 @@ public abstract class BaseEngineModule : IEngineModule, IModulePriorityModule, I
     /// </summary>
     protected void LogError(string message, Exception? exception = null)
     {
-        Logger?.LogError(exception, "[{ModuleName}] {Message}", ModuleName, message);
+        Logger?.LogError(exception, "[{FriendlyId}] {Message}", FriendlyId, message);
         AddLogEntry("Error", message, exception);
     }
     
@@ -564,7 +543,7 @@ public abstract class BaseEngineModule : IEngineModule, IModulePriorityModule, I
     /// </summary>
     protected void LogDebug(string message)
     {
-        Logger?.LogDebug("[{ModuleName}] {Message}", ModuleName, message);
+        Logger?.LogDebug("[{FriendlyId}] {Message}", FriendlyId, message);
         AddLogEntry("Debug", message);
     }
     
@@ -620,7 +599,7 @@ public abstract class BaseEngineModule : IEngineModule, IModulePriorityModule, I
             }
             catch (Exception ex)
             {
-                LogError($"Error during disposal of module {ModuleName}: {ex.Message}", ex);
+                LogError($"Error during disposal of module {FriendlyId}: {ex.Message}", ex);
             }
             finally
             {

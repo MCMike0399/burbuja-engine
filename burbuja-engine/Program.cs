@@ -127,6 +127,7 @@ app.MapGet("/engine/priorities", (IBurbujaEngine engine) =>
     var moduleInfo = engine.Modules.Select(m => new
     {
         module_id = m.ModuleId,
+        friendly_id = m.FriendlyId,
         module_name = m.ModuleName,
         legacy_priority = m.Priority,
         semantic_priority = m is BurbujaEngine.Engine.Core.BaseEngineModule baseModule 

@@ -19,6 +19,11 @@ public interface IEngineModule
     string ModuleName { get; }
     
     /// <summary>
+    /// Friendly identifier for debugging purposes. Combines module name with short ID.
+    /// </summary>
+    string FriendlyId { get; }
+    
+    /// <summary>
     /// Version of the module.
     /// </summary>
     string Version { get; }
