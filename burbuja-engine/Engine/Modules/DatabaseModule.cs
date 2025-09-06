@@ -313,4 +313,46 @@ public class DatabaseModule : BaseEngineModule
     /// Get the health checker instance.
     /// </summary>
     public IHealthChecker? GetHealthChecker() => _healthChecker;
+    
+    /// <summary>
+    /// Configure services that this module provides and requires.
+    /// 
+    /// MICROKERNEL PATTERN: Step 3 - Standardized Service Registration
+    /// 
+    /// This method implements the standardized module pattern where each module
+    /// is responsible for registering its own services. This follows microkernel
+    /// principles of modular service management and clean separation of concerns.
+    /// 
+    /// BENEFITS:
+    /// - Self-Contained: Module manages its own dependencies
+    /// - Discoverable: Developers can see what services a module provides
+    /// - Consistent: Same pattern across all modules
+    /// - Microkernel-Managed: Engine calls this during setup phase
+    /// </summary>
+    public override void ConfigureServices(IServiceCollection services)
+    {
+        // Register all database-related services that this module provides
+        services.AddBurbujaEngineDatabase();
+        
+        // Make the module's database services available to other modules
+        services.AddSingleton<Func<IDatabaseConnection?>>(provider =>
+        {
+            return () =>
+            {
+                var engine = provider.GetService<IBurbujaEngine>();
+                var databaseModule = engine?.GetModule<DatabaseModule>();
+                return databaseModule?.GetDatabaseConnection();
+            };
+        });
+        
+        services.AddSingleton<Func<IHealthChecker?>>(provider =>
+        {
+            return () =>
+            {
+                var engine = provider.GetService<IBurbujaEngine>();
+                var databaseModule = engine?.GetModule<DatabaseModule>();
+                return databaseModule?.GetHealthChecker();
+            };
+        });
+    }
 }

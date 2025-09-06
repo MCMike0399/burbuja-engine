@@ -19,21 +19,20 @@ builder.Services.AddSingleton<EnvironmentConfig>();
 // Add Monitor Blazor services
 builder.Services.AddMonitorBlazorServices();
 
-// Add BurbujaEngine with module registration 
-// MICROKERNEL PRINCIPLE: Fault Isolation - Engine continues running even if modules fail
-builder.Services.AddBurbujaEngineMonitor() // Add monitor services first
-    .AddBurbujaEngine(Guid.NewGuid())
+// Add BurbujaEngine with standardized module registration 
+// MICROKERNEL PRINCIPLE: Modules manage their own service registration
+builder.Services.AddBurbujaEngine(Guid.NewGuid())
     .WithConfiguration(config =>
     {
         config.WithVersion("1.0.0")
               .WithModuleTimeout(TimeSpan.FromMinutes(2))
               .WithShutdownTimeout(TimeSpan.FromMinutes(1))
-              .ContinueOnModuleFailure(true)  // FIXED: Engine should continue when modules fail
+              .ContinueOnModuleFailure(true)  // Engine continues when modules fail
               .EnableParallelInitialization(true);
     })
-    .AddDatabaseModule()
-    .AddMonitorModule()   // Add the new Monitor module
-    .BuildEngine();       // Build the engine with all configured modules
+    .AddDatabaseModule()    // Module handles its own service registration
+    .AddMonitorModule()     // Module handles its own service registration
+    .BuildEngine();         // Build the engine with all configured modules
 
 var app = builder.Build();
 

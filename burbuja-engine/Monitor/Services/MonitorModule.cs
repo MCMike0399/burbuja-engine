@@ -5,6 +5,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using BurbujaEngine.Engine.Core;
 using BurbujaEngine.Monitor.Core;
+using BurbujaEngine.Monitor.Extensions;
 
 namespace BurbujaEngine.Monitor.Services;
 
@@ -622,6 +623,58 @@ public class MonitorModule : BaseEngineModule, IHostedService, IMonitorService, 
                 LogInfo(message);
                 break;
         }
+    }
+
+    /// <summary>
+    /// Configure services that this module provides and requires.
+    /// 
+    /// MICROKERNEL PATTERN: Step 3 - Standardized Service Registration
+    /// 
+    /// This method implements the standardized module pattern where each module
+    /// is responsible for registering its own services. This follows microkernel
+    /// principles of modular service management and clean separation of concerns.
+    /// 
+    /// BENEFITS:
+    /// - Self-Contained: Module manages its own dependencies
+    /// - Discoverable: Developers can see what services a module provides
+    /// - Consistent: Same pattern across all modules
+    /// - Microkernel-Managed: Engine calls this during setup phase
+    /// </summary>
+    public override void ConfigureServices(IServiceCollection services)
+    {
+        // Register all monitor-related services that this module provides
+        services.AddBurbujaEngineMonitor();
+        
+        // Make the module's monitoring services available to other modules
+        services.AddSingleton<Func<IMonitorService?>>(provider =>
+        {
+            return () =>
+            {
+                var engine = provider.GetService<IBurbujaEngine>();
+                var monitorModule = engine?.GetModule<MonitorModule>();
+                return monitorModule;
+            };
+        });
+        
+        services.AddSingleton<Func<IMetricsProvider?>>(provider =>
+        {
+            return () =>
+            {
+                var engine = provider.GetService<IBurbujaEngine>();
+                var monitorModule = engine?.GetModule<MonitorModule>();
+                return monitorModule;
+            };
+        });
+        
+        services.AddSingleton<Func<IMonitorEventLogger?>>(provider =>
+        {
+            return () =>
+            {
+                var engine = provider.GetService<IBurbujaEngine>();
+                var monitorModule = engine?.GetModule<MonitorModule>();
+                return monitorModule;
+            };
+        });
     }
 
     #endregion

@@ -99,52 +99,105 @@ public static class EngineServiceExtensions
 }
 
 /// <summary>
-/// Extension methods for adding specific engine modules.
-/// These follow the ASP.NET Core pattern of Add{Service} methods.
+/// Extension methods for adding specific engine modules with standardized service registration.
+/// 
+/// MICROKERNEL PATTERN: Step 3 - Modularize Services (Standardized Implementation)
+/// 
+/// This standardized pattern ensures that:
+/// 1. Each module manages its own service registration through ConfigureServices()
+/// 2. The microkernel handles all lifecycle management consistently
+/// 3. Developers get a predictable, simple registration pattern
+/// 4. Service dependencies are resolved before module instantiation
+/// 
+/// DEVELOPER BENEFITS:
+/// - Consistent Pattern: Same approach for all modules
+/// - Automatic Service Registration: Modules declare their own dependencies
+/// - Clean Separation: Service registration separate from business logic
+/// - Microkernel Management: Engine handles all infrastructure concerns
 /// </summary>
 public static class EngineModuleExtensions
 {
     /// <summary>
-    /// Add the Database module to the engine with all required database services.
-    /// This method ensures that database services are registered before the module is added.
+    /// Add the Database module to the engine using the standardized pattern.
+    /// 
+    /// The DatabaseModule will automatically register its required services
+    /// through its ConfigureServices() method, ensuring proper dependency resolution.
     /// </summary>
     public static EngineBuilder AddDatabaseModule(this EngineBuilder builder)
     {
         if (builder == null) throw new ArgumentNullException(nameof(builder));
         
-        // Register database services first (this ensures dependencies are available)
-        builder.Services.AddBurbujaEngineDatabase();
-        
-        // Then register the database module
+        // The standardized pattern: let the module register its own services
         return builder.AddEngineModule<DatabaseModule>();
     }
     
     /// <summary>
-    /// Add the Database module with custom database configuration.
-    /// This allows for custom database setup while maintaining the proper registration order.
-    /// </summary>
-    public static EngineBuilder AddDatabaseModule(this EngineBuilder builder, Action<IServiceCollection> configureDatabaseServices)
-    {
-        if (builder == null) throw new ArgumentNullException(nameof(builder));
-        if (configureDatabaseServices == null) throw new ArgumentNullException(nameof(configureDatabaseServices));
-        
-        // Apply custom database configuration
-        configureDatabaseServices(builder.Services);
-        
-        // Register the database module
-        return builder.AddEngineModule<DatabaseModule>();
-    }
-    
-    /// <summary>
-    /// Add the Monitor module to the engine.
-    /// This module provides comprehensive monitoring and real-time dashboards for the engine.
+    /// Add the Monitor module to the engine using the standardized pattern.
+    /// 
+    /// The MonitorModule will automatically register its required services
+    /// through its ConfigureServices() method, ensuring proper dependency resolution.
     /// </summary>
     public static EngineBuilder AddMonitorModule(this EngineBuilder builder)
     {
         if (builder == null) throw new ArgumentNullException(nameof(builder));
         
-        // Use the new Monitor package
-        return builder.AddEngineModule<BurbujaEngine.Monitor.Services.MonitorModule>();
+        // The standardized pattern: let the module register its own services
+        return builder.AddEngineModule<MonitorModule>();
+    }
+    
+    /// <summary>
+    /// Add a custom module using the standardized pattern.
+    /// 
+    /// The module will automatically register its required services through
+    /// its ConfigureServices() method, following the microkernel principle
+    /// of modular service registration.
+    /// </summary>
+    public static EngineBuilder AddModule<TModule>(this EngineBuilder builder)
+        where TModule : class, IEngineModule
+    {
+        if (builder == null) throw new ArgumentNullException(nameof(builder));
+        
+        // The standardized pattern: let the module register its own services
+        return builder.AddEngineModule<TModule>();
+    }
+    
+    /// <summary>
+    /// Add a module with additional service configuration.
+    /// 
+    /// This allows for advanced scenarios where additional services need to be
+    /// registered beyond what the module provides through ConfigureServices().
+    /// </summary>
+    public static EngineBuilder AddModule<TModule>(this EngineBuilder builder, Action<IServiceCollection> additionalServices)
+        where TModule : class, IEngineModule
+    {
+        if (builder == null) throw new ArgumentNullException(nameof(builder));
+        if (additionalServices == null) throw new ArgumentNullException(nameof(additionalServices));
+        
+        // Apply additional service configuration first
+        additionalServices(builder.Services);
+        
+        // Then add the module using the standardized pattern
+        return builder.AddEngineModule<TModule>();
+    }
+    
+    /// <summary>
+    /// Add a module conditionally based on environment or configuration.
+    /// 
+    /// This enables environment-specific module loading while maintaining
+    /// the standardized service registration pattern.
+    /// </summary>
+    public static EngineBuilder AddModuleWhen<TModule>(this EngineBuilder builder, Func<bool> condition)
+        where TModule : class, IEngineModule
+    {
+        if (builder == null) throw new ArgumentNullException(nameof(builder));
+        if (condition == null) throw new ArgumentNullException(nameof(condition));
+        
+        if (condition())
+        {
+            return builder.AddEngineModule<TModule>();
+        }
+        
+        return builder;
     }
 }
 
