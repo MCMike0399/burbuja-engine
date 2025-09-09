@@ -324,42 +324,54 @@ public class DatabaseModule : BaseEngineModule
     /// <summary>
     /// Configure services that this module provides and requires.
     /// 
-    /// MICROKERNEL PATTERN: Step 3 - Standardized Service Registration
+    /// SIMPLIFIED MICROKERNEL PATTERN: Direct Service Registration
     /// 
-    /// This method implements the standardized module pattern where each module
-    /// is responsible for registering its own services. This follows microkernel
-    /// principles of modular service management and clean separation of concerns.
+    /// This method implements the simplified microkernel pattern where modules
+    /// register their services directly with the DI container. This eliminates
+    /// the need for complex driver communication patterns.
     /// 
     /// BENEFITS:
-    /// - Self-Contained: Module manages its own dependencies
-    /// - Discoverable: Developers can see what services a module provides
-    /// - Consistent: Same pattern across all modules
-    /// - Microkernel-Managed: Engine calls this during setup phase
+    /// - Direct Integration: Services are directly available via DI
+    /// - Standard Patterns: Uses familiar .NET DI patterns
+    /// - Better Performance: No message passing overhead
+    /// - Easier Testing: Standard mocking and testing patterns
+    /// - Simpler Debugging: Direct call stacks
     /// </summary>
     public override void ConfigureServices(IServiceCollection services)
     {
         // Register all database-related services that this module provides
         services.AddBurbujaEngineDatabase();
         
-        // Make the module's database services available to other modules
-        services.AddSingleton<Func<IDatabaseConnection?>>(provider =>
+        // Register the module itself as a service so other modules can access it
+        services.AddSingleton<DatabaseModule>(provider =>
         {
-            return () =>
-            {
-                var engine = provider.GetService<IBurbujaEngine>();
-                var databaseModule = engine?.GetModule<DatabaseModule>();
-                return databaseModule?.GetDatabaseConnection();
-            };
+            var engine = provider.GetService<IBurbujaEngine>();
+            return engine?.GetModule<DatabaseModule>() ?? throw new InvalidOperationException("DatabaseModule not found");
         });
         
-        services.AddSingleton<Func<IHealthChecker?>>(provider =>
+        // Register database services directly for easy consumption by other modules
+        services.AddSingleton<IDatabaseConnection>(provider =>
         {
-            return () =>
-            {
-                var engine = provider.GetService<IBurbujaEngine>();
-                var databaseModule = engine?.GetModule<DatabaseModule>();
-                return databaseModule?.GetHealthChecker();
-            };
+            var databaseModule = provider.GetRequiredService<DatabaseModule>();
+            return databaseModule.GetDatabaseConnection() ?? throw new InvalidOperationException("Database connection not available");
+        });
+        
+        services.AddSingleton<IHealthChecker>(provider =>
+        {
+            var databaseModule = provider.GetRequiredService<DatabaseModule>();
+            return databaseModule.GetHealthChecker() ?? throw new InvalidOperationException("Database health checker not available");
+        });
+        
+        // Register collection factory if available
+        services.AddSingleton<ICollectionFactory>(provider =>
+        {
+            var databaseModule = provider.GetRequiredService<DatabaseModule>();
+            return databaseModule.GetCollectionFactory() ?? throw new InvalidOperationException("Database collection factory not available");
         });
     }
+    
+    /// <summary>
+    /// Get the collection factory instance.
+    /// </summary>
+    public ICollectionFactory? GetCollectionFactory() => Context.ServiceProvider.GetService<ICollectionFactory>();
 }

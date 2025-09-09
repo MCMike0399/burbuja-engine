@@ -2,32 +2,30 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using BurbujaEngine.Engine.Drivers;
-using BurbujaEngine.Engine.Microkernel;
 using BurbujaEngine.Logging;
 
 namespace BurbujaEngine.Engine.Core;
 
 /// <summary>
-/// BurbujaEngine - A microkernel architecture implementation following enterprise design patterns.
+/// BurbujaEngine - A simplified microkernel architecture implementation following true microkernel design patterns.
 /// 
-/// MICROKERNEL ARCHITECTURE COMPONENTS (Based on System Design Best Practices):
+/// SIMPLIFIED MICROKERNEL ARCHITECTURE:
 /// 
-/// Step 1 - Core Functionality: This class implements the minimal microkernel with essential services:
+/// Step 1 - Core Functionality (Minimal Kernel): This class implements only essential microkernel services:
 /// - Module lifecycle management (loading, initialization, startup, shutdown)
-/// - Driver registry and communication bus for IPC
 /// - Service coordination and dependency resolution
 /// - State management and health monitoring
+/// - Configuration management
 /// 
 /// Step 2 - Well-Defined Interfaces: Communicates with user-space modules through:
 /// - IEngineModule interface for module contracts
 /// - IModuleContext for providing microkernel services to modules
 /// - Event-driven communication for state changes
 /// 
-/// Step 4 - Inter-Process Communication (IPC): Implements robust IPC through:
-/// - DriverCommunicationBus for message passing between drivers
-/// - Event system for state change notifications
-/// - Service provider pattern for dependency injection
+/// Step 3 - Modularized Services: All business logic runs in user-space:
+/// - DatabaseModule handles all database functionality
+/// - MonitorModule handles web dashboard and APIs
+/// - Custom modules handle specific business logic
 /// 
 /// Step 6 - Service Management: Provides comprehensive service lifecycle management:
 /// - Dynamic module registration and unregistration
@@ -35,20 +33,13 @@ namespace BurbujaEngine.Engine.Core;
 /// - Graceful shutdown with proper cleanup
 /// - Health monitoring and diagnostics
 /// 
-/// Step 7 - Performance Optimization: Includes performance optimizations:
-/// - Parallel initialization support (configurable)
-/// - Efficient dependency resolution
-/// - Minimal context switching overhead
-/// - Asynchronous operations throughout
+/// REMOVED COMPLEXITY:
+/// - No driver layer (replaced with direct module dependencies)
+/// - No inter-driver communication bus (use standard DI patterns)
+/// - No driver registry (modules register services directly)
 /// 
-/// Step 8 - Security & Isolation: Implements security measures:
-/// - Module isolation through service boundaries
-/// - Controlled access to microkernel services via context
-/// - Error containment to prevent cascade failures
-/// 
-/// This microkernel serves as the foundation for a modular, extensible system where
-/// user-space modules (business logic, data access, etc.) operate independently
-/// while leveraging core microkernel services for communication and coordination.
+/// This represents a true microkernel where the core remains minimal and focused,
+/// while all business functionality runs in well-isolated user-space modules.
 /// </summary>
 public class BurbujaEngine : IBurbujaEngine, IDisposable
 {
@@ -65,21 +56,10 @@ public class BurbujaEngine : IBurbujaEngine, IDisposable
     private DateTime? _startedAt;
     private CancellationTokenSource? _engineCancellationTokenSource;
     
-    // Microkernel components - Step 1: Core Functionality
-    // These represent the minimal set of services that must remain in kernel space
-    private readonly IDriverRegistry _driverRegistry;          // Driver management service
-    private readonly IDriverCommunicationBus _communicationBus; // IPC mechanism (Step 4)
-    private readonly IDriverFactory _driverFactory;            // Driver instantiation service
-    
     public Guid EngineId { get; }
     public string Version { get; }
     public IReadOnlyList<IEngineModule> Modules => _modules.AsReadOnly();
     public IServiceProvider ServiceProvider => _serviceProvider;
-    
-    // Microkernel core services - integrated directly into the engine
-    public IDriverRegistry DriverRegistry => _driverRegistry;
-    public IDriverCommunicationBus CommunicationBus => _communicationBus;
-    public IDriverFactory DriverFactory => _driverFactory;
     
     public EngineState State
     {
@@ -110,11 +90,6 @@ public class BurbujaEngine : IBurbujaEngine, IDisposable
     public event EventHandler<EngineStateChangedEventArgs>? StateChanged;
     public event EventHandler<ModuleStateChangedEventArgs>? ModuleStateChanged;
     
-    // Driver events - core microkernel functionality
-    public event EventHandler<IEngineDriver>? DriverRegistered;
-    public event EventHandler<Guid>? DriverUnregistered;
-    public event EventHandler<DriverStateChangedEventArgs>? DriverStateChanged;
-    
     public BurbujaEngine(
         Guid engineId,
         IEngineConfiguration configuration,
@@ -128,17 +103,8 @@ public class BurbujaEngine : IBurbujaEngine, IDisposable
         _logger = loggerFactory.CreateLogger<BurbujaEngine>();
         Version = configuration.Version;
         
-        // Initialize microkernel components
-        _communicationBus = new DriverCommunicationBus(_loggerFactory.CreateLogger<DriverCommunicationBus>());
-        _driverRegistry = new DriverRegistry(_loggerFactory.CreateLogger<DriverRegistry>());
-        _driverFactory = new DriverFactory(_serviceProvider);
-        
-        // Wire up events
-        _driverRegistry.DriverRegistered += (sender, driver) => DriverRegistered?.Invoke(this, driver);
-        _driverRegistry.DriverUnregistered += (sender, driverId) => DriverUnregistered?.Invoke(this, driverId);
-        
-        _logger.LogInformation("[{EngineId}] BurbujaEngine microkernel created with {ModuleCount} modules", 
-            EngineId, _modules.Count);
+        _logger.LogInformation("[{EngineId}] BurbujaEngine microkernel created with simplified architecture", 
+            EngineId);
     }
     
     /// <summary>
@@ -685,7 +651,7 @@ public class BurbujaEngine : IBurbujaEngine, IDisposable
         var context = GetExecutionContext();
         
         // Sort by priority first using the new priority comparer, then resolve dependencies
-                    var comparer = new ModulePriorityComparer(context);
+        var comparer = new ModulePriorityComparer(context);
         var modulesByPriority = _modules.OrderBy(m => m, comparer);
         
         _logger.LogDebug("[{EngineId}] Module priority order (context: {Context}): {ModuleOrder}", 
@@ -802,459 +768,6 @@ public class BurbujaEngine : IBurbujaEngine, IDisposable
         _logger.LogStateTransition("BurbujaEngine", previousState.ToString(), newState.ToString());
     }
     
-    #region Microkernel Driver Management
-    
-    /// <summary>
-    /// Register a driver with the microkernel.
-    /// 
-    /// MICROKERNEL PATTERN: Step 5 - Device Drivers in User Space
-    /// Drivers represent hardware/external service abstractions that run in user space
-    /// but communicate with the microkernel through well-defined interfaces.
-    /// This separation allows for:
-    /// - Easy driver updates without kernel changes
-    /// - Better fault isolation (driver crashes don't crash kernel)
-    /// - Modular driver architecture
-    /// </summary>
-    public async Task<DriverResult> RegisterDriverAsync(IEngineDriver driver)
-    {
-        if (driver == null) throw new ArgumentNullException(nameof(driver));
-        
-        try
-        {
-            await _driverRegistry.RegisterDriverAsync(driver);
-            await _communicationBus.RegisterDriverAsync(driver);
-            
-            // Subscribe to driver state changes
-            driver.StateChanged += OnDriverStateChanged;
-            
-            _logger.LogInformation("[{EngineId}] Registered driver '{DriverName}' (ID: {DriverId})", 
-                EngineId, driver.DriverName, driver.DriverId);
-            
-            return DriverResult.Successful($"Driver {driver.DriverName} registered successfully");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "[{EngineId}] Failed to register driver '{DriverName}': {Message}", 
-                EngineId, driver.DriverName, ex.Message);
-            return DriverResult.Failed(ex);
-        }
-    }
-    
-    /// <summary>
-    /// Register a driver using a factory function.
-    /// </summary>
-    public async Task<DriverResult> RegisterDriverAsync<T>(Func<T> driverFactory) where T : class, IEngineDriver
-    {
-        if (driverFactory == null) throw new ArgumentNullException(nameof(driverFactory));
-        
-        try
-        {
-            var driver = driverFactory();
-            return await RegisterDriverAsync(driver);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "[{EngineId}] Failed to create and register driver of type {DriverType}: {Message}", 
-                EngineId, typeof(T).Name, ex.Message);
-            return DriverResult.Failed(ex);
-        }
-    }
-    
-    /// <summary>
-    /// Register a driver with dependency injection.
-    /// </summary>
-    public async Task<DriverResult> RegisterDriverAsync<T>() where T : class, IEngineDriver
-    {
-        try
-        {
-            var driver = _driverFactory.CreateDriver<T>();
-            return await RegisterDriverAsync(driver);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "[{EngineId}] Failed to create and register driver of type {DriverType}: {Message}", 
-                EngineId, typeof(T).Name, ex.Message);
-            return DriverResult.Failed(ex);
-        }
-    }
-    
-    /// <summary>
-    /// Unregister a driver from the microkernel.
-    /// </summary>
-    public async Task<DriverResult> UnregisterDriverAsync(Guid driverId)
-    {
-        try
-        {
-            var driver = _driverRegistry.GetDriver(driverId);
-            if (driver == null)
-            {
-                return DriverResult.Failed($"Driver with ID {driverId} not found");
-            }
-            
-            // Unsubscribe from driver state changes
-            driver.StateChanged -= OnDriverStateChanged;
-            
-            await _communicationBus.UnregisterDriverAsync(driverId);
-            await _driverRegistry.UnregisterDriverAsync(driverId);
-            
-            _logger.LogInformation("[{EngineId}] Unregistered driver '{DriverName}' (ID: {DriverId})", 
-                EngineId, driver.DriverName, driverId);
-            
-            return DriverResult.Successful($"Driver {driver.DriverName} unregistered successfully");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "[{EngineId}] Failed to unregister driver {DriverId}: {Message}", 
-                EngineId, driverId, ex.Message);
-            return DriverResult.Failed(ex);
-        }
-    }
-    
-    /// <summary>
-    /// Get a driver by its ID.
-    /// </summary>
-    public IEngineDriver? GetDriver(Guid driverId)
-    {
-        return _driverRegistry.GetDriver(driverId);
-    }
-    
-    /// <summary>
-    /// Get a driver by type.
-    /// </summary>
-    public T? GetDriver<T>() where T : class, IEngineDriver
-    {
-        return _driverRegistry.GetDriver<T>();
-    }
-    
-    /// <summary>
-    /// Get all drivers of a specific type.
-    /// </summary>
-    public IEnumerable<IEngineDriver> GetDriversByType(DriverType type)
-    {
-        return _driverRegistry.GetDriversByType(type);
-    }
-    
-    /// <summary>
-    /// Initialize all drivers in the microkernel.
-    /// </summary>
-    public async Task<MicrokernelResult> InitializeDriversAsync(CancellationToken cancellationToken = default)
-    {
-        var stopwatch = Stopwatch.StartNew();
-        
-        try
-        {
-            _logger.LogInformation("[{EngineId}] Initializing drivers", EngineId);
-            
-            var drivers = _driverRegistry.GetAllDrivers().ToList();
-            var results = new Dictionary<Guid, DriverResult>();
-            
-            foreach (var driver in drivers)
-            {
-                var context = CreateDriverContext(cancellationToken);
-                var result = await driver.InitializeAsync(context, cancellationToken);
-                results[driver.DriverId] = result;
-                
-                if (!result.Success)
-                {
-                    _logger.LogError("[{EngineId}] Failed to initialize driver {DriverName}: {Message}", 
-                        EngineId, driver.DriverName, result.Message);
-                }
-            }
-            
-            var successful = results.Count(r => r.Value.Success);
-            _logger.LogInformation("[{EngineId}] Initialized {SuccessCount}/{TotalCount} drivers successfully", 
-                EngineId, successful, results.Count);
-            
-            return MicrokernelResult.Successful($"Initialized {successful}/{results.Count} drivers", stopwatch.Elapsed)
-                .WithDriverResults(results);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "[{EngineId}] Failed to initialize drivers: {Message}", EngineId, ex.Message);
-            return MicrokernelResult.Failed(ex, stopwatch.Elapsed);
-        }
-    }
-    
-    /// <summary>
-    /// Start all drivers in the microkernel.
-    /// </summary>
-    public async Task<MicrokernelResult> StartDriversAsync(CancellationToken cancellationToken = default)
-    {
-        var stopwatch = Stopwatch.StartNew();
-        
-        try
-        {
-            _logger.LogInformation("[{EngineId}] Starting drivers", EngineId);
-            
-            var drivers = _driverRegistry.GetAllDrivers()
-                .Where(d => d.State == DriverState.Initialized)
-                .ToList();
-            
-            var results = new Dictionary<Guid, DriverResult>();
-            
-            foreach (var driver in drivers)
-            {
-                var result = await driver.StartAsync(cancellationToken);
-                results[driver.DriverId] = result;
-                
-                if (!result.Success)
-                {
-                    _logger.LogError("[{EngineId}] Failed to start driver {DriverName}: {Message}", 
-                        EngineId, driver.DriverName, result.Message);
-                }
-            }
-            
-            var successful = results.Count(r => r.Value.Success);
-            _logger.LogInformation("[{EngineId}] Started {SuccessCount}/{TotalCount} drivers successfully", 
-                EngineId, successful, results.Count);
-            
-            return MicrokernelResult.Successful($"Started {successful}/{results.Count} drivers", stopwatch.Elapsed)
-                .WithDriverResults(results);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "[{EngineId}] Failed to start drivers: {Message}", EngineId, ex.Message);
-            return MicrokernelResult.Failed(ex, stopwatch.Elapsed);
-        }
-    }
-    
-    /// <summary>
-    /// Stop all drivers in the microkernel.
-    /// </summary>
-    public async Task<MicrokernelResult> StopDriversAsync(CancellationToken cancellationToken = default)
-    {
-        var stopwatch = Stopwatch.StartNew();
-        
-        try
-        {
-            _logger.LogInformation("[{EngineId}] Stopping drivers", EngineId);
-            
-            var drivers = _driverRegistry.GetAllDrivers()
-                .Where(d => d.State == DriverState.Running)
-                .ToList();
-            
-            var results = new Dictionary<Guid, DriverResult>();
-            
-            foreach (var driver in drivers)
-            {
-                var result = await driver.StopAsync(cancellationToken);
-                results[driver.DriverId] = result;
-                
-                if (!result.Success)
-                {
-                    _logger.LogError("[{EngineId}] Failed to stop driver {DriverName}: {Message}", 
-                        EngineId, driver.DriverName, result.Message);
-                }
-            }
-            
-            var successful = results.Count(r => r.Value.Success);
-            _logger.LogInformation("[{EngineId}] Stopped {SuccessCount}/{TotalCount} drivers successfully", 
-                EngineId, successful, results.Count);
-            
-            return MicrokernelResult.Successful($"Stopped {successful}/{results.Count} drivers", stopwatch.Elapsed)
-                .WithDriverResults(results);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "[{EngineId}] Failed to stop drivers: {Message}", EngineId, ex.Message);
-            return MicrokernelResult.Failed(ex, stopwatch.Elapsed);
-        }
-    }
-    
-    /// <summary>
-    /// Shutdown all drivers in the microkernel.
-    /// </summary>
-    public async Task<MicrokernelResult> ShutdownDriversAsync(CancellationToken cancellationToken = default)
-    {
-        var stopwatch = Stopwatch.StartNew();
-        
-        try
-        {
-            _logger.LogInformation("[{EngineId}] Shutting down drivers", EngineId);
-            
-            var drivers = _driverRegistry.GetAllDrivers().ToList();
-            var results = new Dictionary<Guid, DriverResult>();
-            
-            foreach (var driver in drivers)
-            {
-                var result = await driver.ShutdownAsync(cancellationToken);
-                results[driver.DriverId] = result;
-                
-                if (!result.Success)
-                {
-                    _logger.LogError("[{EngineId}] Failed to shutdown driver {DriverName}: {Message}", 
-                        EngineId, driver.DriverName, result.Message);
-                }
-            }
-            
-            var successful = results.Count(r => r.Value.Success);
-            _logger.LogInformation("[{EngineId}] Shut down {SuccessCount}/{TotalCount} drivers successfully", 
-                EngineId, successful, results.Count);
-            
-            return MicrokernelResult.Successful($"Shut down {successful}/{results.Count} drivers", stopwatch.Elapsed)
-                .WithDriverResults(results);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "[{EngineId}] Failed to shutdown drivers: {Message}", EngineId, ex.Message);
-            return MicrokernelResult.Failed(ex, stopwatch.Elapsed);
-        }
-    }
-    
-    /// <summary>
-    /// Get health information about all drivers.
-    /// </summary>
-    public async Task<MicrokernelHealth> GetDriversHealthAsync(CancellationToken cancellationToken = default)
-    {
-        var stopwatch = Stopwatch.StartNew();
-        
-        try
-        {
-            var drivers = _driverRegistry.GetAllDrivers().ToList();
-            var healthTasks = drivers.Select(async driver =>
-            {
-                try
-                {
-                    var health = await driver.GetHealthAsync(cancellationToken);
-                    return (driver.DriverId, health, (Exception?)null);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "[{EngineId}] Failed to get health for driver {DriverId}: {Message}", 
-                        EngineId, driver.DriverId, ex.Message);
-                    return (driver.DriverId, (DriverHealth?)null, ex);
-                }
-            });
-            
-            var healthResults = await Task.WhenAll(healthTasks);
-            var driverHealths = new Dictionary<Guid, DriverHealth>();
-            
-            foreach (var (driverId, health, exception) in healthResults)
-            {
-                if (health != null)
-                {
-                    driverHealths[driverId] = health;
-                }
-                else if (exception != null)
-                {
-                    var driver = _driverRegistry.GetDriver(driverId);
-                    driverHealths[driverId] = DriverHealth.Unhealthy(driverId, 
-                        driver?.DriverName ?? "Unknown", $"Health check failed: {exception.Message}");
-                }
-            }
-            
-            var microkernelHealth = MicrokernelHealth.FromDrivers(driverHealths);
-            return microkernelHealth with { ResponseTime = stopwatch.Elapsed };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "[{EngineId}] Failed to get drivers health: {Message}", EngineId, ex.Message);
-            throw;
-        }
-    }
-    
-    /// <summary>
-    /// Get diagnostic information about all drivers.
-    /// </summary>
-    public async Task<MicrokernelDiagnostics> GetDriversDiagnosticsAsync(CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            var drivers = _driverRegistry.GetAllDrivers().ToList();
-            var diagnosticTasks = drivers.Select(async driver =>
-            {
-                try
-                {
-                    var diagnostics = await driver.GetDiagnosticsAsync(cancellationToken);
-                    return (driver.DriverId, diagnostics, (Exception?)null);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "[{EngineId}] Failed to get diagnostics for driver {DriverId}: {Message}", 
-                        EngineId, driver.DriverId, ex.Message);
-                    return (driver.DriverId, (DriverDiagnostics?)null, ex);
-                }
-            });
-            
-            var diagnosticResults = await Task.WhenAll(diagnosticTasks);
-            var driverDiagnostics = new Dictionary<Guid, DriverDiagnostics>();
-            
-            foreach (var (driverId, diagnostics, exception) in diagnosticResults)
-            {
-                if (diagnostics != null)
-                {
-                    driverDiagnostics[driverId] = diagnostics;
-                }
-                else if (exception != null)
-                {
-                    var driver = _driverRegistry.GetDriver(driverId);
-                    driverDiagnostics[driverId] = new DriverDiagnostics
-                    {
-                        DriverId = driverId,
-                        DriverName = driver?.DriverName ?? "Unknown",
-                        State = driver?.State ?? DriverState.Error,
-                        Metadata = { ["diagnostics_error"] = exception.Message }
-                    };
-                }
-            }
-            
-            var uptime = _startedAt.HasValue ? (TimeSpan?)(DateTime.UtcNow - _startedAt.Value) : null;
-            
-            return new MicrokernelDiagnostics
-            {
-                MicrokernelId = EngineId,
-                Version = Version,
-                CreatedAt = _createdAt,
-                InitializedAt = _initializedAt,
-                StartedAt = _startedAt,
-                Uptime = uptime,
-                DriverCount = drivers.Count,
-                ModuleCount = _modules.Count,
-                DriverDiagnostics = driverDiagnostics,
-                Configuration = _configuration.Values.ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
-                Environment = GetEnvironmentInfo(),
-                Metadata = new Dictionary<string, object>
-                {
-                    ["microkernel_version"] = "1.0.0",
-                    ["architecture"] = "microkernel",
-                    ["driver_communication_enabled"] = true
-                }
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "[{EngineId}] Failed to get drivers diagnostics: {Message}", EngineId, ex.Message);
-            throw;
-        }
-    }
-    
-    /// <summary>
-    /// Create a driver context for initialization.
-    /// </summary>
-    private IDriverContext CreateDriverContext(CancellationToken cancellationToken)
-    {
-        return new DriverContext(
-            _serviceProvider,
-            _loggerFactory,
-            _configuration.Values,
-            cancellationToken,
-            this,
-            _communicationBus);
-    }
-    
-    /// <summary>
-    /// Handle driver state changes.
-    /// </summary>
-    private void OnDriverStateChanged(object? sender, DriverStateChangedEventArgs e)
-    {
-        _logger.LogDebug("[{EngineId}] Driver {DriverName} state changed: {PreviousState} -> {NewState}", 
-            EngineId, e.DriverName, e.PreviousState, e.NewState);
-        
-        DriverStateChanged?.Invoke(this, e);
-    }
-    
-    #endregion
-    
     public void Dispose()
     {
         Dispose(true);
@@ -1290,34 +803,6 @@ public class BurbujaEngine : IBurbujaEngine, IDisposable
                     {
                         _logger.LogError(ex, "[{EngineId}] Error disposing module: {Message}", EngineId, ex.Message);
                     }
-                }
-                
-                // Dispose microkernel components
-                try
-                {
-                    _communicationBus?.Dispose();
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "[{EngineId}] Error disposing communication bus: {Message}", EngineId, ex.Message);
-                }
-                
-                try
-                {
-                    _driverRegistry?.Dispose();
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "[{EngineId}] Error disposing driver registry: {Message}", EngineId, ex.Message);
-                }
-                
-                try
-                {
-                    _driverFactory?.Dispose();
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "[{EngineId}] Error disposing driver factory: {Message}", EngineId, ex.Message);
                 }
                 
                 _engineCancellationTokenSource?.Dispose();

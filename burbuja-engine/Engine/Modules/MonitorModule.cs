@@ -10,14 +10,14 @@ namespace BurbujaEngine.Engine.Modules;
 /// <summary>
 /// Monitor module for BurbujaEngine - Real-time System Monitoring Service.
 /// 
-/// MICROKERNEL PATTERN: Step 3 - Modularize Services (Monitoring Example)
+/// SIMPLIFIED MICROKERNEL PATTERN: User-Space Monitoring Service
 /// 
 /// This module demonstrates how system monitoring capabilities are implemented
-/// as a user-space service in the microkernel architecture:
+/// as a user-space service in the simplified microkernel architecture:
 /// 
 /// MONITORING SERVICE CHARACTERISTICS:
 /// - Real-time metrics collection from all engine components
-/// - Performance monitoring for modules, drivers, and microkernel
+/// - Performance monitoring for modules and microkernel
 /// - Health status aggregation and alerting
 /// - Resource usage tracking (CPU, memory, I/O)
 /// - Event logging and audit trail
@@ -28,14 +28,16 @@ namespace BurbujaEngine.Engine.Modules;
 /// - Fault isolation: Monitor failures don't affect core engine operations
 /// - Extensible: Can add new metrics without touching microkernel
 /// - Hot-swappable: Can update monitoring logic without engine restart
+/// - Direct access: Uses standard DI to access other module services
 /// 
 /// INFRASTRUCTURE MODULE PRIORITY:
 /// - Medium Priority: Important for operations but not critical for startup
 /// - Context-Aware: Higher priority in development/testing environments
 /// - Dependency-Safe: Designed to work even if some dependencies fail
 /// 
-/// This exemplifies how the microkernel architecture enables building
-/// comprehensive monitoring solutions as independent, user-space services.
+/// This exemplifies how the simplified microkernel architecture enables building
+/// comprehensive monitoring solutions as independent, user-space services
+/// using standard dependency injection patterns.
 /// </summary>
 [DiscoverableModule(
     Name = "Monitor Module",

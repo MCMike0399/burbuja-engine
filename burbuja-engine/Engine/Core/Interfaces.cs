@@ -1,6 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using BurbujaEngine.Engine.Drivers;
 
 namespace BurbujaEngine.Engine.Core;
 
@@ -158,41 +157,43 @@ public interface IModuleContext
 }
 
 /// <summary>
-/// Main engine interface that implements microkernel architecture.
+/// Main engine interface that implements simplified microkernel architecture.
 /// 
-/// MICROKERNEL PATTERN: Complete Implementation
+/// SIMPLIFIED MICROKERNEL PATTERN: True Minimal Core
 /// 
 /// This interface represents the MICROKERNEL itself - the minimal, essential core
 /// that manages all user-space services and provides fundamental system services:
 /// 
-/// Step 1 - Core Functionality:
+/// Step 1 - Core Functionality (Minimal):
 /// - Module lifecycle management (register, initialize, start, stop, shutdown)
-/// - Driver management and coordination
-/// - State management and monitoring
+/// - Service coordination and dependency resolution
+/// - State management and health monitoring
+/// - Configuration management
 /// 
 /// Step 2 - Well-Defined Interfaces:
-/// - Clean contracts for module and driver interaction
+/// - Clean contracts for module interaction
 /// - Context-based service provisioning
 /// - Event-driven communication
 /// 
-/// Step 4 - Inter-Process Communication:
-/// - Driver communication bus for message passing
-/// - Service provider for dependency injection
-/// - Event system for state changes
+/// Step 3 - Modularized Services:
+/// - All business logic runs in user-space modules
+/// - Direct service dependency injection (no complex IPC)
+/// - Standard .NET DI patterns for inter-module communication
 /// 
 /// Step 6 - Service Management:
 /// - Dynamic service registration and discovery
 /// - Dependency-aware initialization
 /// - Health monitoring and diagnostics
 /// 
-/// MICROKERNEL CHARACTERISTICS:
-/// - Minimal core: Only essential services remain in the microkernel
-/// - User-space modules: Business logic, data access, etc. run as modules
-/// - IPC infrastructure: Robust communication between components
+/// SIMPLIFIED MICROKERNEL CHARACTERISTICS:
+/// - Truly minimal core: Only essential lifecycle services in the microkernel
+/// - User-space modules: All business logic (database, monitoring, etc.) as modules
+/// - Direct DI: Standard dependency injection instead of complex message passing
 /// - Fault isolation: Module failures don't crash the microkernel
-/// - Modularity: Easy to add, remove, or update functionality
+/// - Simple modularity: Easy to add, remove, or update functionality
 /// 
-/// This IS the microkernel - managing modules, drivers, and providing core IPC services.
+/// This IS a true microkernel - managing only essential services while delegating
+/// all business functionality to well-isolated user-space modules.
 /// </summary>
 public interface IBurbujaEngine
 {
@@ -220,21 +221,6 @@ public interface IBurbujaEngine
     /// Service provider for the microkernel.
     /// </summary>
     IServiceProvider ServiceProvider { get; }
-    
-    /// <summary>
-    /// Driver registry - core microkernel service.
-    /// </summary>
-    IDriverRegistry DriverRegistry { get; }
-    
-    /// <summary>
-    /// Communication bus - core microkernel IPC service.
-    /// </summary>
-    IDriverCommunicationBus CommunicationBus { get; }
-    
-    /// <summary>
-    /// Driver factory - core microkernel service.
-    /// </summary>
-    IDriverFactory DriverFactory { get; }
     
     /// <summary>
     /// Register a module with the engine.
@@ -290,43 +276,6 @@ public interface IBurbujaEngine
     /// Get diagnostic information about the engine and all modules/drivers.
     /// </summary>
     Task<EngineDiagnostics> GetDiagnosticsAsync(CancellationToken cancellationToken = default);
-    
-    // Microkernel Driver Management
-    
-    /// <summary>
-    /// Register a driver with the microkernel.
-    /// </summary>
-    Task<DriverResult> RegisterDriverAsync(IEngineDriver driver);
-    
-    /// <summary>
-    /// Register a driver using a factory function.
-    /// </summary>
-    Task<DriverResult> RegisterDriverAsync<T>(Func<T> driverFactory) where T : class, IEngineDriver;
-    
-    /// <summary>
-    /// Register a driver with dependency injection.
-    /// </summary>
-    Task<DriverResult> RegisterDriverAsync<T>() where T : class, IEngineDriver;
-    
-    /// <summary>
-    /// Unregister a driver from the microkernel.
-    /// </summary>
-    Task<DriverResult> UnregisterDriverAsync(Guid driverId);
-    
-    /// <summary>
-    /// Get a driver by its ID.
-    /// </summary>
-    IEngineDriver? GetDriver(Guid driverId);
-    
-    /// <summary>
-    /// Get a driver by type.
-    /// </summary>
-    T? GetDriver<T>() where T : class, IEngineDriver;
-    
-    /// <summary>
-    /// Get all drivers of a specific type.
-    /// </summary>
-    IEnumerable<IEngineDriver> GetDriversByType(DriverType type);
     
     /// <summary>
     /// Event fired when engine state changes.
